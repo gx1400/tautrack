@@ -415,6 +415,64 @@ class Store:
                 spans.append({"start": int(r["ts"]), "end": int(r["ts"]), "text": r["text"]})
         return spans
 
+    def satellite_series(
+        self, device_id: int, seconds: int, now: int | None = None
+    ) -> dict[str, Any]:
+        """Signal strength per PRN over time, on one shared time axis.
+
+        Satellites rise and set, so each PRN exists for only part of the window. The
+        series are aligned on the union of timestamps and padded with nulls, which is
+        what makes a line begin when a satellite is acquired and stop when it is lost,
+        rather than being drawn straight across the interval it was absent.
+
+        Only tracked samples carry a signal value, so these lines show exactly the
+        satellites actually contributing to the solution.
+        """
+        now = now or int(time.time())
+        since = now - seconds
+        span = self.choose_span(seconds)
+
+        if span == "raw":
+            rows = self._conn.execute(
+                "SELECT ts, prn, signal FROM sat_samples "
+                "WHERE device_id = ? AND ts >= ? AND signal IS NOT NULL "
+                "ORDER BY ts",
+                (device_id, since),
+            ).fetchall()
+            points = [(int(r["ts"]), int(r["prn"]), float(r["signal"])) for r in rows]
+        else:
+            rows = self._conn.execute(
+                "SELECT bucket, prn, avg_signal FROM sat_trends "
+                "WHERE device_id = ? AND span = ? AND bucket >= ? AND avg_signal IS NOT NULL "
+                "ORDER BY bucket",
+                (device_id, span, since),
+            ).fetchall()
+            points = [(int(r["bucket"]), int(r["prn"]), float(r["avg_signal"])) for r in rows]
+
+        if not points:
+            return {"span": span, "ts": [], "series": []}
+
+        stamps = sorted({t for t, _, _ in points})
+        index = {t: i for i, t in enumerate(stamps)}
+        by_prn: dict[int, list[float | None]] = {}
+        for t, prn, sig in points:
+            by_prn.setdefault(prn, [None] * len(stamps))[index[t]] = sig
+
+        # Busiest satellites first, so the legend order is stable and useful.
+        order = sorted(by_prn, key=lambda p: (-sum(v is not None for v in by_prn[p]), p))
+        return {
+            "span": span,
+            "ts": stamps,
+            "series": [
+                {
+                    "prn": prn,
+                    "values": by_prn[prn],
+                    "samples": sum(v is not None for v in by_prn[prn]),
+                }
+                for prn in order
+            ],
+        }
+
     def satellite_history(
         self, device_id: int, seconds: int, now: int | None = None
     ) -> list[dict[str, Any]]:

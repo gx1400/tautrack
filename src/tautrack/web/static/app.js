@@ -16,7 +16,17 @@ const state = {
   span: "1h",
   charts: new Map(),   // metric -> {plot, host, card}
   trails: false,
+  satPlot: null,       // the per-PRN signal chart
+  satIndex: new Map(), // prn -> series index, for hover focus from the table
 };
+
+/* Distinct hues for up to a dozen simultaneous satellites. Chosen to stay separable
+ * in both themes and to avoid the red reserved for faults. */
+const PRN_COLOURS = [
+  "#4aa3ff", "#3fb950", "#d29922", "#a371f7", "#1f9ec4", "#e06c9f",
+  "#7ec699", "#f0883e", "#6cb6ff", "#c9a227", "#8b949e", "#56d4dd",
+];
+const prnColour = (i) => PRN_COLOURS[i % PRN_COLOURS.length];
 
 // Metric help, embedded by the server so tiles can be labelled on first paint.
 const HELP = (() => {
@@ -515,6 +525,8 @@ function renderSky(data) {
     const sig = (s.signal !== null && s.signal !== undefined)
       ? `<span class="bar"><span style="width:${pct}%"></span></span><span class="sig">${s.signal}</span>`
       : `<span class="sig muted">${s.acquiring ? "acq" : "—"}</span>`;
+    tr.addEventListener("mouseenter", () => focusPrn(s.prn));
+    tr.addEventListener("mouseleave", () => focusPrn(null));
     tr.innerHTML =
       `<td class="prn">${s.prn}</td>` +
       `<td class="num">${s.elevation === null ? "—" : s.elevation + "°"}</td>` +
@@ -529,6 +541,104 @@ async function loadSky() {
     const q = state.trails ? `?trail=${state.span}` : "";
     renderSky(await getJSON(`/api/satellites${q}`));
   } catch { /* nothing reported yet */ }
+}
+
+
+
+/* ------------------------------------------------------- satellite signal chart */
+
+async function loadSatSignal() {
+  const host = document.getElementById("satsig-host");
+  const legend = document.getElementById("satsig-legend");
+  if (!host) return;
+
+  let d;
+  try {
+    d = await getJSON(`/api/sat-series?span=${state.span}`);
+  } catch {
+    host.innerHTML = '<div class="empty">no satellite data yet</div>';
+    return;
+  }
+  if (!d.ts || !d.ts.length || !d.series.length) {
+    host.innerHTML = '<div class="empty">no satellites tracked in this window</div>';
+    state.satPlot = null;
+    legend.textContent = "";
+    return;
+  }
+
+  const data = [d.ts, ...d.series.map((s) => s.values)];
+  const muted = css("--muted") || "#8b98a9";
+  const grid = css("--line") || "#273041";
+
+  // Rebuild when the set of satellites changes - uPlot's series list is fixed at
+  // construction, and satellites rise and set constantly.
+  const key = d.series.map((s) => s.prn).join(",");
+  if (!state.satPlot || state.satPlot.key !== key || !host.querySelector(".uplot")) {
+    host.textContent = "";
+    const opts = {
+      width: host.clientWidth || 600,
+      height: 220,
+      padding: [10, 10, 0, 0],
+      // Focus dims the other lines, which is what makes one satellite followable
+      // among a dozen. prox keeps pointer-proximity focus working too.
+      cursor: { focus: { prox: 24, alpha: 0.22 }, y: false, drag: { x: false, y: false } },
+      legend: { show: false },
+      scales: { x: { time: true } },
+      axes: [
+        { stroke: muted, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid },
+          size: 28, font: "10px ui-monospace, monospace" },
+        { stroke: muted, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid },
+          size: 40, font: "10px ui-monospace, monospace" },
+      ],
+      series: [
+        {},
+        ...d.series.map((srs, i) => ({
+          label: `PRN ${srs.prn}`,
+          stroke: prnColour(i),
+          width: 1.6,
+          // A satellite that is not visible has no value, and the line must stop
+          // rather than leap across the interval it was absent.
+          spanGaps: false,
+          points: { show: false },
+        })),
+      ],
+    };
+    const plot = new uPlot(opts, data, host);
+    plot.key = key;
+    state.satPlot = plot;
+  } else {
+    state.satPlot.setSize({ width: host.clientWidth || 600, height: 220 });
+    state.satPlot.setData(data);
+  }
+
+  // Legend doubles as a per-satellite toggle.
+  state.satIndex.clear();
+  legend.textContent = "";
+  d.series.forEach((srs, i) => {
+    state.satIndex.set(srs.prn, i + 1);   // series 0 is the x axis
+    const b = document.createElement("button");
+    b.type = "button";
+    b.innerHTML = `<span class="swatch" style="background:${prnColour(i)}"></span>${srs.prn}`;
+    b.title = `PRN ${srs.prn} — ${srs.samples} sample${srs.samples === 1 ? "" : "s"}`;
+    b.addEventListener("click", () => {
+      const idx = i + 1;
+      const shown = state.satPlot.series[idx].show;
+      state.satPlot.setSeries(idx, { show: !shown });
+      b.classList.toggle("off", shown);
+    });
+    b.addEventListener("mouseenter", () => focusPrn(srs.prn));
+    b.addEventListener("mouseleave", () => focusPrn(null));
+    legend.append(b);
+  });
+}
+
+/* Highlights one satellite's line. Used from both the legend and the satellite table,
+ * so the two views can be read together rather than one at a time. */
+function focusPrn(prn) {
+  if (!state.satPlot) return;
+  const idx = prn === null ? null : state.satIndex.get(prn);
+  if (prn !== null && idx === undefined) return;
+  state.satPlot.setSeries(idx === undefined ? null : idx, { focus: true });
 }
 
 /* ------------------------------------------------------------------ events */
@@ -559,6 +669,7 @@ async function refreshFast() {
 
 async function refreshSlow() {
   await loadAllCharts();
+  await loadSatSignal();
   await loadEvents();
 }
 
@@ -568,6 +679,7 @@ document.querySelectorAll(".span").forEach((b) => {
     b.classList.add("active");
     state.span = b.dataset.span;
     loadAllCharts();
+    loadSatSignal();
     if (state.trails) loadSky();
   });
 });
@@ -584,6 +696,8 @@ window.addEventListener("resize", () => {
     for (const [metric, entry] of state.charts) {
       entry.plot.setSize({ width: entry.host.clientWidth || 300, height: 120 });
     }
+    const sh = document.getElementById("satsig-host");
+    if (state.satPlot && sh) state.satPlot.setSize({ width: sh.clientWidth || 600, height: 220 });
   }, 150);
 });
 

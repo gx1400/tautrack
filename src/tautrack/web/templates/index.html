@@ -91,6 +91,17 @@
     {% endfor %}
   </div>
 
+  <section class="panel satsig-panel" aria-label="Signal by satellite">
+    <div class="panel-head">
+      <h2>Signal by satellite
+        <button type="button" class="help-btn" data-help="sat_signal"
+                aria-label="About signal by satellite">&#9432;</button>
+      </h2>
+      <div class="satsig-legend" id="satsig-legend"></div>
+    </div>
+    <div class="satsig-host" id="satsig-host"></div>
+  </section>
+
   <section class="charts" id="charts" aria-label="Trends">
     {% for c in charts %}
     <figure class="chart-card" data-metric="{{ c.metric }}" data-zero="{{ '1' if c.zero else '0' }}" data-unit="{{ c.unit }}">

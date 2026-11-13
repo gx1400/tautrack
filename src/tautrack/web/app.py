@@ -172,6 +172,19 @@ METRIC_HELP: dict[str, dict[str, str]] = {
             "as FAULT."
         ),
     },
+    "sat_signal": {
+        "title": "Signal by satellite",
+        "text": (
+            "Signal strength of each tracked satellite over time, one line per PRN. A "
+            "line begins when that satellite is acquired and stops when it is lost, so "
+            "the gaps are real visibility rather than missing data. Only tracked "
+            "satellites carry a signal value, so these are exactly the ones "
+            "contributing to the solution. Hovering a row in the satellite table "
+            "highlights its line. Signal strength here is the receiver's own arbitrary "
+            "unit, not dBm - useful for comparison between satellites and over time, "
+            "but not an absolute measure."
+        ),
+    },
     "sky": {
         "title": "Sky view",
         "text": (
@@ -319,6 +332,13 @@ def create_app(settings: Settings, store: Store, poller: Any = None) -> FastAPI:
     def api_help() -> dict[str, Any]:
         """Metric descriptions, so the UI and any other client share one wording."""
         return METRIC_HELP
+
+    @app.get("/api/sat-series")
+    def api_sat_series(span: str = Query("1h")) -> dict[str, Any]:
+        """Signal strength per PRN, aligned on one time axis."""
+        if span not in SPANS:
+            raise HTTPException(status_code=400, detail=f"unknown span {span!r}")
+        return store.satellite_series(device_id(), SPANS[span])
 
     @app.get("/api/events")
     def api_events(limit: int = Query(30, ge=1, le=200)) -> dict[str, Any]:
