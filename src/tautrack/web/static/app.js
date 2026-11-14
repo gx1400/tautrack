@@ -205,18 +205,25 @@ function renderStatus(s) {
 
   // While the unit is actually in holdover the forecast is the less interesting
   // number: what matters is how long this episode has run and what it has cost.
+  //
+  // Gated on the mode, not on the duration: the unit keeps reporting the previous
+  // holdover's duration long after recovering, so a non-zero duration says an episode
+  // happened, not that one is running.
   const pred = num("holdover_predict_us_24h");
   const hdur = num("holdover_duration_s");
   const hnow = num("holdover_present_us");
-  if (hdur) {
+  if (/holdover/i.test(mode || "")) {
     const mins = Math.floor(hdur / 60), secs = Math.round(hdur % 60);
     tiles.append(tile("In holdover",
       mins ? `${mins}m ${secs}s` : `${secs}s`,
       hnow === null ? `${fmt(pred, 1)} µs/24h predicted` : `${fmt(hnow, 2)} µs accrued`,
       "warn", "holdover_present_us"));
   } else {
+    const mins = hdur ? Math.round(hdur / 60) : 0;
     tiles.append(tile("Holdover predict", pred === null ? "—" : `${fmt(pred, 1)} µs`,
-      "per 24 h", "", "holdover_predict_us_24h"));
+      hdur ? `per 24 h · last episode ${mins >= 2 ? `${mins}m` : `${Math.round(hdur)}s`}`
+           : "per 24 h",
+      "", "holdover_predict_us_24h"));
   }
 
   // The unit keeps its own diagnostic log. We cannot read the entries over the
@@ -408,7 +415,19 @@ function makePlot(host, title, zeroLine, unit, getGaps) {
     padding: [8, 8, 0, 0],
     cursor: { show: true, y: false, drag: { x: false, y: false }, sync: syncCursor() },
     legend: { show: false },
-    scales: { x: { time: true } },
+    scales: {
+      x: { time: true },
+      y: {
+        range: (u, dmin, dmax) => {
+          if (dmin === dmax) {
+            const pad = Math.max(Math.abs(dmin) * 0.1, 1);
+            // Do not open a negative axis under a quantity that cannot go negative.
+            return [dmin >= 0 ? Math.max(dmin - pad, 0) : dmin - pad, dmax + pad];
+          }
+          return uPlot.rangeNum(dmin, dmax, 0.1, true);
+        },
+      },
+    },
     axes: [
       { stroke: muted, grid: { stroke: grid, width: 1 }, ticks: { stroke: grid },
         size: 28, font: "10px ui-monospace, monospace" },
@@ -493,7 +512,9 @@ async function loadChart(card) {
   }
 
   if (!d.ts || d.ts.length === 0) {
-    host.innerHTML = '<div class="empty">no data in this window</div>';
+    host.innerHTML = `<div class="empty">${
+      metric === "holdover_present_us" ? "no holdover in this window"
+                                       : "no data in this window"}</div>`;
     state.charts.delete(metric);
     lastEl.textContent = "—";
     resEl.textContent = "";

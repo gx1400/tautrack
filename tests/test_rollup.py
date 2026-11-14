@@ -84,7 +84,11 @@ def test_prune_removes_raw_beyond_retention(store, device) -> None:
 def test_housekeeping_aggregates_before_pruning(store, device) -> None:
     """Ordering matters: pruning first would discard data that was never aggregated."""
     now = int(time.time())
-    old = now - 20 * DAY
+    # Anchored just past an hour boundary so all six samples land in the same bucket.
+    # Taking the raw wall clock meant that for the five minutes before each hour they
+    # straddled two, and the single-row assertion below then read a partial bucket -
+    # a test that failed for about one minute in twelve, entirely at random.
+    old = (now - 20 * DAY) // 3600 * 3600 + 60
     for i in range(6):
         store.write_samples(device, old + i * 60, {"efc_percent": 54.0 + i})
 
