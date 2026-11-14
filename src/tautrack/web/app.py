@@ -169,7 +169,7 @@ METRIC_HELP: dict[str, dict[str, str]] = {
         "text": (
             "A roll-up of six internal self-tests: self test, internal power, oven power, "
             "the OCXO itself, EFC range, and the GPS receiver. Any one failing shows here "
-            "as FAULT."
+            "as FAULT, and the line beneath names which."
         ),
     },
     "sat_signal": {

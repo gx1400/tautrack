@@ -14,7 +14,7 @@ import time
 
 from .config import Settings
 from .device.queries import FAST_QUERIES, STATUS_QUERY
-from .device.screen import Screen, parse_screen
+from .device.screen import HEALTH_SUBSYSTEMS, Screen, parse_screen
 from .device.session import ERR_DATA_STALE, ERR_UNDEFINED_HEADER, Session
 from .store.db import Store
 from .store.rollup import housekeep
@@ -227,6 +227,8 @@ def _screen_texts(s: Screen) -> dict[str, str]:
         out["mode"] = s.mode
     if s.sync_state:
         out["sync_banner"] = s.sync_state
+    if detail := _health_detail(s):
+        out["health_detail"] = detail
     if s.position_mode:
         out["position_mode"] = s.position_mode
     if s.survey_blocked:
@@ -240,6 +242,26 @@ def _screen_texts(s: Screen) -> dict[str, str]:
     if s.pps_clk_status:
         out["pps_clk_status"] = s.pps_clk_status
     return out
+
+
+def _health_detail(s: Screen) -> str | None:
+    """Name the failing subsystems, or confirm how many are reporting clean.
+
+    The rolled-up boolean says something is wrong but not what, and the only part
+    worth reading when the tile goes red is which of the six failed. The count is
+    over subsystems actually parsed rather than the six in principle, so a partial
+    screen reports what it saw instead of implying coverage it does not have.
+    """
+    known = [
+        (label, getattr(s.health, attr))
+        for label, attr in HEALTH_SUBSYSTEMS
+        if getattr(s.health, attr) is not None
+    ]
+    if not known:
+        return None
+    if bad := [label for label, ok in known if not ok]:
+        return f"{', '.join(bad)} fault"
+    return f"{len(known)}/{len(known)} OK"
 
 
 def _health_score(s: Screen) -> float | None:

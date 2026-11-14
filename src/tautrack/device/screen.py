@@ -41,6 +41,18 @@ class Satellite:
     attempting: bool = False
 
 
+#: The subsystems the HEALTH MONITOR block reports, as (screen label, attribute).
+#: Ordered as the unit prints them.
+HEALTH_SUBSYSTEMS: tuple[tuple[str, str], ...] = (
+    ("Self Test", "self_test"),
+    ("Int Pwr", "int_pwr"),
+    ("Oven Pwr", "oven_pwr"),
+    ("OCXO", "ocxo"),
+    ("EFC", "efc"),
+    ("GPS Rcv", "gps_rcv"),
+)
+
+
 @dataclass(slots=True)
 class Health:
     self_test: bool | None = None
@@ -244,14 +256,7 @@ def parse_screen(text: str) -> Screen:
     # --- health ---
     if (line := _find_line(lines, "HEALTH MONITOR")) and (m := _BRACKET.search(line)):
         s.health.overall = m.group(1)
-    for label, attr in (
-        ("Self Test", "self_test"),
-        ("Int Pwr", "int_pwr"),
-        ("Oven Pwr", "oven_pwr"),
-        ("OCXO", "ocxo"),
-        ("EFC", "efc"),
-        ("GPS Rcv", "gps_rcv"),
-    ):
+    for label, attr in HEALTH_SUBSYSTEMS:
         if m := re.search(rf"{label}:\s*(\w+)", whole):
             setattr(s.health, attr, m.group(1).upper() == "OK")
 

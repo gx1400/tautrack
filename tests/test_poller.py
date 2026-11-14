@@ -9,7 +9,13 @@ import pytest
 
 from tautrack.config import Settings
 from tautrack.device.screen import Satellite, Screen
-from tautrack.poller import Poller, _health_score, _min_tracked_elevation, _signature
+from tautrack.poller import (
+    Poller,
+    _health_detail,
+    _health_score,
+    _min_tracked_elevation,
+    _signature,
+)
 from tautrack.store.db import Store
 
 
@@ -100,6 +106,27 @@ def test_health_score_is_zero_if_any_flag_fails() -> None:
     s.health.self_test = True
     s.health.ocxo = False
     assert _health_score(s) == 0.0
+
+
+def test_health_detail_is_none_when_nothing_is_known() -> None:
+    assert _health_detail(Screen()) is None
+
+
+def test_health_detail_counts_only_the_subsystems_actually_parsed() -> None:
+    # A truncated screen must report what it saw, not imply coverage of all six.
+    s = Screen()
+    s.health.self_test = True
+    s.health.ocxo = True
+    assert _health_detail(s) == "2/2 OK"
+
+
+def test_health_detail_names_every_failing_subsystem() -> None:
+    # The roll-up says something is wrong; this is the part that says what.
+    s = Screen()
+    s.health.self_test = True
+    s.health.ocxo = False
+    s.health.efc = False
+    assert _health_detail(s) == "OCXO, EFC fault"
 
 
 def test_min_tracked_elevation_ignores_untracked(tmp_path) -> None:

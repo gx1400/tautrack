@@ -192,7 +192,8 @@ function renderStatus(s) {
 
   const health = num("health_ok");
   tiles.append(tile("Health", health === null ? "—" : (health ? "OK" : "FAULT"),
-    "", health === null ? "" : (health ? "ok" : "bad"), "health_ok"));
+    str("health_detail") || "", health === null ? "" : (health ? "ok" : "bad"),
+    "health_ok"));
 
   // Clocks. All unit-derived values share one format so they compare by eye.
   const c = s.clocks || {};
