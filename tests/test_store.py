@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 
 import pytest
@@ -264,3 +265,78 @@ def test_a_real_outage_is_still_found_among_mixed_cadences(store, device) -> Non
     s = store.series(device, "tfom", 24 * 3600, now=now)
     assert len(s.gaps) == 1, f"expected exactly the real outage, got {s.gaps}"
     assert s.gaps[0][1] - s.gaps[0][0] > 1500
+
+
+# --------------------------------------------------------------- allan deviation
+
+
+def _phase_walk(store, device, n, tau0=15, start=0, noise=1.0):
+    """Write a synthetic 1PPS phase series: white phase noise about zero."""
+    import random
+
+    rng = random.Random(1234)
+    base = int(time.time()) - n * tau0 - start
+    for i in range(n):
+        store.write_samples(device, base + i * tau0, {"pps_ti_ns": rng.gauss(0, noise)})
+    return base
+
+
+def test_adev_reports_the_tau_floor_even_with_no_data(store, device) -> None:
+    """The floor is a property of polling, not of this dataset (Q4)."""
+    a = store.adev(device, 3600)
+    assert a["tau_floor"] == 120.0
+    assert a["tau"] == []
+    assert a["note"]
+
+
+def test_adev_never_reports_below_its_floor(store, device) -> None:
+    _phase_walk(store, device, 400)
+    a = store.adev(device, 12 * 3600)
+    assert a["tau"], a["note"]
+    assert min(a["tau"]) >= 120.0
+
+
+def test_adev_of_white_phase_noise_falls_as_one_over_tau(store, device) -> None:
+    """White PM gives sigma ~ 1/tau, so a decade of tau is a decade of sigma."""
+    _phase_walk(store, device, 3000, noise=5.0)
+    a = store.adev(device, 24 * 3600)
+    lo, hi = a["tau"][0], a["tau"][-1]
+    s_lo, s_hi = a["sigma"][0], a["sigma"][-1]
+    # Slope in log-log; white PM is -1. Tolerance is wide because this is a
+    # finite random sample, not an analytic result.
+    slope = (math.log10(s_hi) - math.log10(s_lo)) / (math.log10(hi) - math.log10(lo))
+    assert -1.35 < slope < -0.75, slope
+
+
+def test_adev_refuses_to_span_a_gap(store, device) -> None:
+    """Two short runs either side of an outage must not be stitched into one long one."""
+    now = int(time.time())
+    for i in range(60):
+        store.write_samples(device, now - 20000 + i * 15, {"pps_ti_ns": float(i)})
+    for i in range(60):
+        store.write_samples(device, now - 3000 + i * 15, {"pps_ti_ns": float(i)})
+    a = store.adev(device, 24 * 3600)
+    # The longest unbroken run is 60 samples at 15 s, well under the total span.
+    assert a["run_seconds"] < 1000
+
+
+# --------------------------------------------------------------- ti spread
+
+
+def test_jitter_series_is_a_rolling_sigma_on_raw(store, device) -> None:
+    _phase_walk(store, device, 400, noise=10.0)
+    j = store.jitter_series(device, "pps_ti_ns", 6 * 3600)
+    assert j.span == "raw"
+    assert "rolling sigma" in j.stat
+    good = [v for v in j.value if v is not None]
+    assert good, "expected a spread series"
+    # Standard deviation of a sigma=10 process, loosely bounded.
+    assert 3.0 < sum(good) / len(good) < 20.0
+
+
+def test_jitter_series_says_when_it_switched_statistic(store, device) -> None:
+    """Averaged tiers have no samples left, so the definition must change and say so."""
+    _phase_walk(store, device, 400, noise=10.0)
+    j = store.jitter_series(device, "pps_ti_ns", 365 * 86400)
+    assert j.stat != "rolling sigma"
+    assert j.span != "raw"

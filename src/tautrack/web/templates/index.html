@@ -91,6 +91,30 @@
     {% endfor %}
   </div>
 
+  <section class="panel adev-panel" aria-label="Allan deviation">
+    <div class="panel-head">
+      <h2>&sigma;(&tau;) &middot; Allan deviation
+        <button type="button" class="help-btn" data-help="adev"
+                aria-label="About Allan deviation">&#9432;</button>
+      </h2>
+      <span class="adev-meta" id="adev-meta"></span>
+    </div>
+    <div class="adev-host" id="adev-host"></div>
+    <p class="adev-floor" id="adev-floor"></p>
+  </section>
+
+  <section class="panel lock-panel" aria-label="Lock state over time">
+    <div class="panel-head">
+      <h2>Lock state
+        <button type="button" class="help-btn" data-help="lock_state"
+                aria-label="About lock state">&#9432;</button>
+      </h2>
+      <div class="lock-legend" id="lock-legend"></div>
+    </div>
+    <div class="lock-strip" id="lock-strip"></div>
+    <div class="lock-scale" id="lock-scale"></div>
+  </section>
+
   <section class="panel satsig-panel" aria-label="Signal by satellite">
     <div class="panel-head">
       <h2>Signal by satellite
@@ -104,7 +128,7 @@
 
   <section class="charts" id="charts" aria-label="Trends">
     {% for c in charts %}
-    <figure class="chart-card" data-metric="{{ c.metric }}" data-zero="{{ '1' if c.zero else '0' }}" data-unit="{{ c.unit }}">
+    <figure class="chart-card" data-metric="{{ c.metric }}" data-zero="{{ '1' if c.zero else '0' }}" data-unit="{{ c.unit }}" data-overlay="{{ c.overlay or '' }}" data-overlay-label="{{ c.overlay_label or '' }}">
       <figcaption>
         <span class="chart-title">{{ c.title }}<button type="button" class="help-btn" data-help="{{ c.metric }}" aria-label="About {{ c.title }}">&#9432;</button></span>
         <span class="chart-meta">

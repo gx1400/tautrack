@@ -388,3 +388,62 @@ footer { color: var(--muted); font-size: 0.72rem; text-align: center; padding: 1
    read together rather than one at a time. */
 .sat-table tbody tr { cursor: default; }
 .sat-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+
+/* ---------------------------------------------------------------- lock state */
+
+.lock-panel .panel-head { flex-wrap: wrap; gap: 0.5rem; }
+.lock-strip {
+  position: relative;
+  height: 20px;
+  width: 100%;
+  border-radius: 4px;
+  /* Ground means "nothing recorded": every state, locked included, paints its own
+     segment, so an unpainted stretch is genuinely missing rather than healthy. */
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.lock-seg { position: absolute; top: 0; bottom: 0; }
+.lock-scale {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+.lock-legend { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.lock-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.lock-key .swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+
+/* Repeat count on a collapsed run of identical events. */
+.events .rep {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  flex: none;
+}
+
+
+/* ---------------------------------------------------------------- allan deviation */
+
+.adev-panel .panel-head { flex-wrap: wrap; gap: 0.5rem; }
+.adev-host { width: 100%; min-height: 220px; }
+.adev-meta {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.adev-floor {
+  margin: 0.5rem 0 0;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: var(--muted);
+}

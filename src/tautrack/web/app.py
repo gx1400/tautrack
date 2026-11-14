@@ -49,13 +49,23 @@ SPANS: dict[str, int] = {
 #: Charted metrics, in display order, with presentation hints.
 CHARTS: list[dict[str, Any]] = [
     {"metric": "pps_ti_ns", "title": "1PPS offset vs GPS", "unit": "ns", "zero": True},
+    {"metric": "pps_ti_ns_spread", "title": "1PPS TI spread", "unit": "ns"},
     {"metric": "efc_percent", "title": "EFC steering", "unit": "%"},
     {"metric": "efc_dac", "title": "EFC (raw DAC)", "unit": "counts"},
-    {"metric": "satellites_tracked", "title": "Satellites tracked", "unit": ""},
+    {
+        "metric": "satellites_tracked",
+        "title": "Satellites tracked",
+        "unit": "",
+        # Visible overlaid on tracked: the distance between the two lines is the
+        # acquisition shortfall that the field testing turned on.
+        "overlay": "satellites_visible",
+        "overlay_label": "visible",
+    },
     {"metric": "min_tracked_elevation", "title": "Lowest elevation tracked", "unit": "deg"},
     {"metric": "ffom", "title": "FFOM (0 = settled)", "unit": ""},
     {"metric": "tfom", "title": "TFOM", "unit": ""},
     {"metric": "holdover_predict_us_24h", "title": "Holdover prediction", "unit": "us/24h"},
+    {"metric": "holdover_present_us", "title": "Holdover error (actual)", "unit": "us"},
 ]
 
 
@@ -130,6 +140,8 @@ METRIC_HELP: dict[str, dict[str, str]] = {
     "satellites_tracked": {
         "title": "Satellites tracked",
         "text": (
+            "The lighter line is satellites visible, the solid one those actually "
+            "tracked. "
             "How many satellites the receiver is actually using, against how many it can "
             "see. Two thresholds matter: FOUR are needed to survey a position, but only "
             "ONE is needed to keep time once the position is known and held. A unit in "
@@ -170,6 +182,63 @@ METRIC_HELP: dict[str, dict[str, str]] = {
             "A roll-up of six internal self-tests: self test, internal power, oven power, "
             "the OCXO itself, EFC range, and the GPS receiver. Any one failing shows here "
             "as FAULT, and the line beneath names which."
+        ),
+    },
+    "diag_log_count": {
+        "title": "Diagnostic log",
+        "text": (
+            "The unit maintains its own internal event log and writes to it whether or "
+            "not anyone is polling. We do not read the entries - that is not among the "
+            "read-only commands this tool allows itself - but the counter rising means "
+            "the unit recorded something, including while we were disconnected. Treat a "
+            "jump as a prompt to look at the front panel, not as a fault in itself."
+        ),
+    },
+    "lock_state": {
+        "title": "Lock state",
+        "text": (
+            "SmartClock mode across the selected window. Locked to GPS is the normal "
+            "condition; Recovery means the loop is re-settling after reacquiring; "
+            "Holdover means GPS is gone and the oscillator is free-running against its "
+            "learned model; Power-up is the warm-up. The same colours shade the "
+            "background of every sparkline below, so an excursion can be read against "
+            "what the unit was doing at the time. Locked is left unshaded there - it is "
+            "the normal case, and tinting a whole healthy day would hide the exceptions."
+        ),
+    },
+    "adev": {
+        "title": "Allan deviation",
+        "text": (
+            "sigma(tau) is the standard measure of oscillator stability: how much the "
+            "frequency wanders between successive intervals of length tau. Ordinary "
+            "standard deviation is no use here because it does not converge for the "
+            "noise oscillators actually have. Lower is better, and the slope names the "
+            "limiting noise: falling as 1/tau is phase noise, flat is the flicker "
+            "floor, rising means drift. This is computed from the 1PPS offset, so it "
+            "measures how well the output tracks GPS rather than the oscillator alone - "
+            "separating those needs an independent reference. Polling cannot reach "
+            "short tau, so the chart starts at its floor and says so."
+        ),
+    },
+    "pps_ti_ns_spread": {
+        "title": "1PPS TI spread",
+        "text": (
+            "How much the 1PPS offset is moving, as opposed to where it is sitting. A "
+            "quiet offset parked away from zero and a noisy one centred on zero look "
+            "alike on the offset chart and completely different here. On short spans "
+            "this is a rolling standard deviation of the raw samples; on long spans the "
+            "raw samples are gone, so it is the min-max spread of each bucket. The "
+            "caption says which you are looking at."
+        ),
+    },
+    "holdover_present_us": {
+        "title": "Holdover error (actual)",
+        "text": (
+            "The error the unit believes it has accumulated during the current holdover, "
+            "in microseconds. This is the measured excursion, not the forecast: the "
+            "holdover prediction says what a full day without GPS would cost, this says "
+            "what the present episode has cost so far. Flat near zero whenever the unit "
+            "is locked."
         ),
     },
     "sat_signal": {
@@ -284,6 +353,21 @@ def create_app(settings: Settings, store: Store, poller: Any = None) -> FastAPI:
     ) -> dict[str, Any]:
         if span not in SPANS:
             raise HTTPException(status_code=400, detail=f"unknown span {span!r}")
+        # Spread is derived rather than stored: it cannot be computed at poll time,
+        # because a single tick yields a single sample and no spread at all.
+        if metric.endswith("_spread"):
+            s = store.jitter_series(device_id(), metric[: -len("_spread")], SPANS[span])
+            return {
+                "metric": s.metric,
+                "resolution": s.span,
+                "ts": s.ts,
+                "value": s.value,
+                "min": None,
+                "max": None,
+                "gaps": s.gaps,
+                # Which statistic this actually is - it changes between tiers.
+                "stat": s.stat,
+            }
         s = store.series(
             device_id(),
             metric,
@@ -305,6 +389,13 @@ def create_app(settings: Settings, store: Store, poller: Any = None) -> FastAPI:
             # interpolating a straight line across an outage.
             "gaps": s.gaps,
         }
+
+    @app.get("/api/adev")
+    def api_adev(span: str = Query("24h")) -> dict[str, Any]:
+        """Overlapping Allan deviation of the 1PPS phase series (Q4)."""
+        if span not in SPANS:
+            raise HTTPException(status_code=400, detail=f"unknown span {span!r}")
+        return store.adev(device_id(), SPANS[span])
 
     @app.get("/api/states")
     def api_states(span: str = Query("1h"), metric: str = Query("mode")) -> dict[str, Any]:

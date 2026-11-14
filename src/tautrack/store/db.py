@@ -8,6 +8,7 @@ knowing whether the answer comes from raw samples or an aggregate (Q5).
 from __future__ import annotations
 
 import itertools
+import math
 import sqlite3
 import threading
 import time
@@ -27,6 +28,15 @@ HOURLY_MAX_SECONDS = 60 * 24 * 3600
 #: of the expected cadence. Three leaves room for one missed poll without crying wolf,
 #: while still catching a real outage.
 GAP_FACTOR = 3.0
+
+#: Shortest averaging interval worth reporting for Allan deviation. Polling gives one
+#: phase sample per tick, so tau below a couple of minutes is unreachable by this
+#: architecture (C-3). Surfaced to the client so the chart can say so outright rather
+#: than quietly starting its x axis wherever the data happens to allow.
+ADEV_TAU_FLOOR = 120.0
+
+#: Fewest samples a rolling-spread window may contain before the figure is meaningless.
+JITTER_MIN_WINDOW = 8
 
 
 @dataclass(slots=True)
@@ -49,6 +59,9 @@ class Series:
     max_value: list[float | None] | None = None
     #: Inclusive (start, end) epoch pairs with no data between them.
     gaps: list[tuple[int, int]] = field(default_factory=list)
+    #: Which statistic this series carries, when it is not simply the metric itself.
+    #: Derived series change definition between tiers and must say which one applies.
+    stat: str | None = None
 
 
 class _Result:
@@ -390,6 +403,184 @@ class Store:
         # Aggregate buckets have a known, fixed width, so no estimation is needed.
         return _with_gaps(series, 3600.0 if span == "hour" else 86400.0)
 
+    def _contiguous_runs(
+        self, ts: list[int], value: list[float], interval: float
+    ) -> list[tuple[list[int], list[float]]]:
+        """Split a series wherever the data stops, returning only the solid stretches.
+
+        Allan deviation assumes evenly spaced phase samples. Carrying a gap through the
+        estimator silently treats an outage as though it were measured, so the series
+        is cut at every gap and the analysis runs on one unbroken run.
+        """
+        if not ts:
+            return []
+        runs: list[tuple[list[int], list[float]]] = []
+        start = 0
+        threshold = interval * GAP_FACTOR
+        for i in range(1, len(ts) + 1):
+            if i == len(ts) or (ts[i] - ts[i - 1]) > threshold:
+                if i - start >= 2:
+                    runs.append((ts[start:i], value[start:i]))
+                start = i
+        return runs
+
+    def adev(self, device_id: int, seconds: int, now: int | None = None) -> dict[str, Any]:
+        """Overlapping Allan deviation of the 1PPS phase series (Q4).
+
+        Reads the raw tier only. The aggregate tiers keep min/avg/max, and an average
+        is a low-pass filter: phase information the estimator needs does not survive
+        it, so there is no honest way to compute this from a rollup.
+
+        Long tau only, per the Q4 decision bounded by C-3. The floor is returned so the
+        chart can state it rather than implying coverage down to one second, which
+        polling cannot reach.
+        """
+        now = now or int(time.time())
+        since = now - seconds
+        mid = self.metric_id("pps_ti_ns")
+        rows = self._conn.execute(
+            "SELECT ts, value FROM samples "
+            "WHERE device_id = ? AND metric_id = ? AND ts >= ? AND value IS NOT NULL "
+            "ORDER BY ts",
+            (device_id, mid, since),
+        ).fetchall()
+        ts = [int(r["ts"]) for r in rows]
+        val = [float(r["value"]) for r in rows]
+
+        base = {
+            "tau": [],
+            "sigma": [],
+            "pairs": [],
+            "tau_floor": ADEV_TAU_FLOOR,
+            "tau0": None,
+            "run_seconds": 0,
+            "points": 0,
+            "note": None,
+        }
+        if len(ts) < 8:
+            return {**base, "note": "not enough 1PPS samples yet"}
+
+        tau0 = _nominal_interval(ts) or float(ts[1] - ts[0])
+        runs = self._contiguous_runs(ts, val, tau0)
+        if not runs:
+            return {**base, "tau0": tau0, "note": "no unbroken stretch of data"}
+
+        # The longest unbroken stretch, because confidence at a given tau depends on how
+        # many non-overlapping intervals fit inside one run, not on the total sample count.
+        rts, rval = max(runs, key=lambda r: len(r[0]))
+        n = len(rts)
+        run_seconds = int(rts[-1] - rts[0])
+        # Phase in seconds; the metric is stored in nanoseconds.
+        x = [v * 1e-9 for v in rval]
+
+        # tau must clear the polling floor, and the longest tau worth reporting is about
+        # a fifth of the run - beyond that the estimate rests on a handful of intervals.
+        m_lo = max(1, math.ceil(ADEV_TAU_FLOOR / tau0))
+        m_hi = min((n - 1) // 2, int(run_seconds / (5 * tau0)))
+        if m_hi < m_lo:
+            return {
+                **base,
+                "tau0": tau0,
+                "run_seconds": run_seconds,
+                "points": n,
+                "note": (
+                    f"longest unbroken run is {run_seconds // 60} min; "
+                    f"needs about {int(ADEV_TAU_FLOOR * 5) // 60} min for the shortest tau"
+                ),
+            }
+
+        taus: list[float] = []
+        sigmas: list[float] = []
+        pairs: list[int] = []
+        for m in _log_steps(m_lo, m_hi):
+            acc = 0.0
+            count = n - 2 * m
+            for i in range(count):
+                d = x[i + 2 * m] - 2.0 * x[i + m] + x[i]
+                acc += d * d
+            tau = m * tau0
+            taus.append(tau)
+            sigmas.append(math.sqrt(acc / (2 * count * tau * tau)))
+            pairs.append(count)
+
+        return {
+            "tau": taus,
+            "sigma": sigmas,
+            "pairs": pairs,
+            "tau_floor": ADEV_TAU_FLOOR,
+            "tau0": tau0,
+            "run_seconds": run_seconds,
+            "points": n,
+            "note": None,
+        }
+
+    def jitter_series(
+        self, device_id: int, metric: str, seconds: int, now: int | None = None
+    ) -> Series:
+        """Short-term spread of a metric rather than its level (FR-15).
+
+        The 1PPS offset chart shows where the output sits; this shows how much it is
+        moving. A quiet excursion away from zero and a noisy one sitting on zero look
+        very different here and nearly identical there.
+
+        On the raw tier this is a rolling standard deviation. On the aggregate tiers the
+        samples are already gone, so it is the stored max-min spread of each bucket -
+        a different statistic, which is why the caller is told which one it got.
+        """
+        now = now or int(time.time())
+        since = now - seconds
+        span = self.choose_span(seconds)
+        mid = self.metric_id(metric)
+
+        if span != "raw":
+            rows = self._conn.execute(
+                "SELECT bucket, min_value, max_value FROM trends "
+                "WHERE device_id = ? AND metric_id = ? AND span = ? AND bucket >= ? "
+                "ORDER BY bucket",
+                (device_id, mid, span, since),
+            ).fetchall()
+            s = Series(
+                metric=f"{metric}_spread",
+                span=span,
+                ts=[int(r["bucket"]) for r in rows],
+                value=[
+                    (r["max_value"] - r["min_value"])
+                    if r["max_value"] is not None and r["min_value"] is not None
+                    else None
+                    for r in rows
+                ],
+            )
+            s.stat = "min-max spread"
+            return _with_gaps(s, 3600.0 if span == "hour" else 86400.0)
+
+        rows = self._conn.execute(
+            "SELECT ts, value FROM samples "
+            "WHERE device_id = ? AND metric_id = ? AND ts >= ? AND value IS NOT NULL "
+            "ORDER BY ts",
+            (device_id, mid, since),
+        ).fetchall()
+        ts = [int(r["ts"]) for r in rows]
+        val = [float(r["value"]) for r in rows]
+        if len(ts) < JITTER_MIN_WINDOW:
+            s = Series(metric=f"{metric}_spread", span="raw", ts=[], value=[])
+            s.stat = "not enough samples"
+            return s
+
+        # A window proportional to the view, so the line keeps roughly the same visual
+        # texture whether you are looking at an hour or a week.
+        width = max(JITTER_MIN_WINDOW, min(len(ts) // 40, 240))
+        out_ts: list[int] = []
+        out_v: list[float | None] = []
+        for i in range(width - 1, len(ts)):
+            w = val[i - width + 1 : i + 1]
+            mean = sum(w) / width
+            out_ts.append(ts[i])
+            out_v.append(math.sqrt(sum((q - mean) ** 2 for q in w) / width))
+
+        s = Series(metric=f"{metric}_spread", span="raw", ts=out_ts, value=out_v)
+        s.stat = f"rolling sigma, n={width}"
+        return _with_gaps(s, _nominal_interval(out_ts))
+
     def state_spans(
         self, device_id: int, metric: str, seconds: int, now: int | None = None
     ) -> list[dict[str, Any]]:
@@ -551,3 +742,25 @@ def _with_gaps(series: Series, interval: float) -> Series:
     series.max_value = maxs
     series.gaps = gaps
     return series
+
+
+def _log_steps(lo: int, hi: int, per_decade: int = 6) -> list[int]:
+    """Roughly logarithmically spaced integers from lo to hi, inclusive.
+
+    Allan deviation is read on a log-log plot, so evenly spaced tau would crowd the
+    right-hand end and starve the left. Duplicates are dropped, which is why this
+    cannot simply be a comprehension over a geometric series.
+    """
+    if hi < lo:
+        return []
+    out: list[int] = []
+    step = 10 ** (1 / per_decade)
+    cur = float(lo)
+    while cur <= hi:
+        m = round(cur)
+        if not out or m > out[-1]:
+            out.append(m)
+        cur = max(cur * step, cur + 1)
+    if out[-1] != hi:
+        out.append(hi)
+    return out
