@@ -28,6 +28,19 @@ const PRN_COLOURS = [
 ];
 const prnColour = (i) => PRN_COLOURS[i % PRN_COLOURS.length];
 
+/* Every chart joins one cursor group, so hovering any of them draws the crosshair at
+ * the same instant on all the others. Reading a spike in one metric is only half the
+ * question - the other half is what every other metric was doing at that moment.
+ * Only the x scale is shared; the y scales carry different units and must not be. */
+const CURSOR_SYNC = uPlot.sync("tautrack");
+const syncCursor = () => ({
+  key: CURSOR_SYNC.key,
+  // Series focus stays local: hovering a sparkline must not reach over and change
+  // which satellite is highlighted on the per-PRN chart.
+  setSeries: false,
+  scales: ["x", null],
+});
+
 // Metric help, embedded by the server so tiles can be labelled on first paint.
 const HELP = (() => {
   try {
@@ -247,6 +260,17 @@ function cursorTooltip(unit) {
           tip.hidden = true;
           return;
         }
+        // Charts sample at different cadences, so the synced index can land on a point
+        // well away from the pointer's actual time. Suppress the tooltip rather than
+        // report a value from the wrong moment.
+        if (u.cursor.sync && u.cursor.sync.scales) {
+          const want = u.posToVal(u.cursor.left, "x");
+          const slack = Math.max((u.scales.x.max - u.scales.x.min) / 60, 1);
+          if (Number.isFinite(want) && Math.abs(x - want) > slack) {
+            tip.hidden = true;
+            return;
+          }
+        }
         const when = new Date(x * 1000).toLocaleString([], {
           month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
         });
@@ -310,7 +334,7 @@ function makePlot(host, title, zeroLine, unit, getGaps) {
     width: host.clientWidth || 300,
     height: 120,
     padding: [8, 8, 0, 0],
-    cursor: { show: true, y: false, drag: { x: false, y: false } },
+    cursor: { show: true, y: false, drag: { x: false, y: false }, sync: syncCursor() },
     legend: { show: false },
     scales: { x: { time: true } },
     axes: [
@@ -581,7 +605,12 @@ async function loadSatSignal() {
       padding: [10, 10, 0, 0],
       // Focus dims the other lines, which is what makes one satellite followable
       // among a dozen. prox keeps pointer-proximity focus working too.
-      cursor: { focus: { prox: 24, alpha: 0.22 }, y: false, drag: { x: false, y: false } },
+      cursor: {
+        focus: { prox: 24, alpha: 0.22 },
+        y: false,
+        drag: { x: false, y: false },
+        sync: syncCursor(),
+      },
       legend: { show: false },
       scales: { x: { time: true } },
       axes: [
