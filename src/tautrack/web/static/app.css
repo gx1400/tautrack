@@ -352,7 +352,10 @@ footer { color: var(--muted); font-size: 0.72rem; text-align: center; padding: 1
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.tiles { align-items: start; }
+/* Tiles stretch to the tallest in the row (the grid default). An earlier
+   align-items:start here left any tile without a sub-caption - Health - visibly
+   shorter than its neighbours; the line-clamp above is what actually bounds the
+   tall ones, so start-alignment was no longer buying anything. */
 
 
 /* ---------------------------------------------------------------- satellite signal */
