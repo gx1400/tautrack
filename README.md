@@ -35,8 +35,31 @@ stack, and is readable from a phone.
 
 ## Hardware support
 
-Initial target is the **HP Z3801A** and SCPI-compatible siblings (Z3805A, HP
-58503A, and the Lucent/Symmetricom units that share the SmartClock firmware).
+> **Tested against exactly one unit:** an **HP Z3801A**, serial 3542A05653,
+> firmware **3543-A**. Nothing else has been verified against real hardware.
+
+The Z3801A is the design target, and the SCPI-compatible siblings (Z3805A, HP
+58503A, and the Lucent/Symmetricom units sharing the SmartClock firmware) are
+*expected* to work but are unconfirmed. Treat them as untested.
+
+The caution is not generic. Several things here were derived from this firmware's
+actual output rather than from a specification, and are the parts most likely to
+differ on another unit:
+
+- The `:SYST:STAT?` screen is parsed by **column position**, discovered from the
+  layout this firmware emits. A different layout will mis-parse rather than fail
+  loudly.
+- The date is corrected by a fixed **1024-week** offset for the GPS week rollover.
+  Later firmware may not need it, or may need a different one.
+- 1PPS TI is reported in **nanoseconds, or picoseconds below 1 ns** - a unit
+  switch mid-field, and one that matters most when accuracy is best.
+- Of the SCPI headers probed, **14 were rejected** as undefined by this firmware.
+  The polled set in [`docs/command-map.md`](docs/command-map.md) is what this unit
+  actually answers, not what the family supports.
+
+If you run it against another unit, [`docs/command-map.md`](docs/command-map.md)
+and the fixtures under `tests/` are the places to start, and a capture of your
+`:SYST:STAT?` output is the single most useful thing to report.
 
 Connected either directly over serial or through a serial device server such as the
 Waveshare RS232/485/422 TO POE ETH (B) - one of the few that supports the 7 data bit /
