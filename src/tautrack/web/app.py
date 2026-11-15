@@ -293,7 +293,9 @@ def _tz(name: str) -> tzinfo:
         return UTC
 
 
-def create_app(settings: Settings, store: Store, poller: Any = None) -> FastAPI:
+def create_app(
+    settings: Settings, store: Store, poller: Any = None, checker: Any = None
+) -> FastAPI:
     app = FastAPI(title="tautrack", version=__version__, docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     templates = Jinja2Templates(directory=str(HERE / "templates"))
@@ -317,6 +319,13 @@ def create_app(settings: Settings, store: Store, poller: Any = None) -> FastAPI:
         except Exception as exc:
             return JSONResponse({"status": "error", "detail": str(exc)}, status_code=500)
         return JSONResponse({"status": "ok", "version": __version__})
+
+    @app.get("/api/version")
+    def api_version() -> dict[str, Any]:
+        """What is running, and whether anything newer has been published."""
+        if checker is None:
+            return {"current": __version__, "available": False}
+        return checker.state.snapshot(settings.update.image)
 
     @app.get("/api/status")
     def api_status() -> dict[str, Any]:

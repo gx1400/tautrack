@@ -17,6 +17,9 @@ RUN python -m pip install --no-cache-dir --upgrade pip build \
 
 FROM python:3.15-slim AS runtime
 
+# Lets the update banner offer a docker pull rather than a bare link.
+ENV TAUTRACK_CONTAINER=1
+
 ARG VERSION=0.0.0-dev
 LABEL org.opencontainers.image.title="tautrack" \
       org.opencontainers.image.description="Monitoring and trend analysis for GPS-disciplined oscillators" \

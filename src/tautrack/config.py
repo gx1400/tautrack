@@ -129,6 +129,26 @@ class DisplaySettings(BaseModel):
     gps_rollover_days: int = 7168
 
 
+class UpdateSettings(BaseModel):
+    """Check whether a newer release exists, and say so in the UI.
+
+    On by default: a monitoring tool quietly running an old build is a worse default
+    than one outbound request a day. Disabling it is a single setting, and the check
+    never blocks startup, polling or a request - a host with no route to the internet
+    behaves identically, minus the banner.
+    """
+
+    enabled: bool = True
+    #: The GitHub repository whose releases are consulted.
+    repo: str = "gx1400/tautrack"
+    #: Container image the banner offers to pull, when running in one.
+    image: str = "ghcr.io/gx1400/tautrack"
+    interval_hours: float = 24.0
+    #: Keeps the first check off the startup path.
+    startup_delay_seconds: float = 30.0
+    timeout_seconds: float = 6.0
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="TAUTRACK_",
@@ -143,6 +163,7 @@ class Settings(BaseSettings):
     otel: OtelSettings = Field(default_factory=OtelSettings)
     web: WebSettings = Field(default_factory=WebSettings)
     display: DisplaySettings = Field(default_factory=DisplaySettings)
+    update: UpdateSettings = Field(default_factory=UpdateSettings)
 
     @classmethod
     def settings_customise_sources(
