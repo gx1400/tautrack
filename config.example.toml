@@ -68,3 +68,16 @@ service_name = "tautrack"
 metrics = true
 logs = true
 traces = true
+
+[update]
+# Checks GitHub once a day for a newer release and shows a dismissable banner.
+# One outbound request per day, server side, never on the request path: a host with
+# no route to the internet behaves identically, minus the banner.
+# Disable with this, or TAUTRACK_UPDATE__ENABLED=false.
+enabled = true
+repo = "gx1400/tautrack"
+image = "ghcr.io/gx1400/tautrack"
+interval_hours = 24.0
+# Keeps the first check off the startup path.
+startup_delay_seconds = 30.0
+timeout_seconds = 6.0

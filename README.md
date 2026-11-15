@@ -2,6 +2,13 @@
 
 # tautrack
 
+[![CI](https://github.com/gx1400/tautrack/actions/workflows/ci.yml/badge.svg)](https://github.com/gx1400/tautrack/actions/workflows/ci.yml)
+[![Release](https://github.com/gx1400/tautrack/actions/workflows/release.yml/badge.svg)](https://github.com/gx1400/tautrack/actions/workflows/release.yml)
+[![GitHub release](https://img.shields.io/github/v/release/gx1400/tautrack?sort=semver)](https://github.com/gx1400/tautrack/releases)
+[![Container](https://img.shields.io/badge/ghcr.io-gx1400%2Ftautrack-2496ed?logo=docker&logoColor=white)](https://github.com/gx1400/tautrack/pkgs/container/tautrack)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![AI disclosure: copilot](https://img.shields.io/badge/AI%20disclosure-copilot-6f42c1)](AI_DISCLOSURE.md)
+
 Monitoring, logging and trend analysis for GPS-disciplined oscillators (GPSDOs).
 
 <br clear="left">
@@ -172,6 +179,20 @@ host = "0.0.0.0"
 
 ## Docker
 
+The quickest route is Compose. [`docker-compose.example.yml`](docker-compose.example.yml)
+is annotated and ready to copy:
+
+```bash
+cp docker-compose.example.yml docker-compose.yml
+# edit the TAUTRACK_TRANSPORT__TCP__HOST line to point at your device server
+docker compose up -d
+```
+
+It publishes to `127.0.0.1:8080` rather than every interface, because there is no
+authentication; drop the prefix deliberately if you want it on the LAN.
+
+Or directly:
+
 ```bash
 docker run -d --name tautrack \
   --restart unless-stopped \
@@ -196,6 +217,18 @@ docker run -d --name tautrack \
 
 Use a restart policy (`--restart unless-stopped`) rather than an external supervisor;
 the container already has a healthcheck.
+
+### Update notifications
+
+Once a day the server asks GitHub whether a newer release exists, and shows a
+dismissable banner if so - with the matching `docker pull` command when running in a
+container. Dismissal is remembered per version, so declining one release does not
+hide the next.
+
+The check is deliberately unobtrusive: it runs on a background loop rather than the
+request path, never blocks startup or polling, and every failure is silent. A host
+with no route to the internet behaves identically, minus the banner. Turn it off with
+`TAUTRACK_UPDATE__ENABLED=false` or `enabled = false` under `[update]`.
 
 ## Importing existing data
 

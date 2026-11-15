@@ -447,3 +447,43 @@ footer { color: var(--muted); font-size: 0.72rem; text-align: center; padding: 1
   line-height: 1.45;
   color: var(--muted);
 }
+
+
+/* ---------------------------------------------------------------- update banner */
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  font-size: 0.8rem;
+  color: var(--text);
+}
+.update-banner[hidden] { display: none; }
+.update-banner .ub-text { font-weight: 600; }
+.update-banner .ub-pull {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0.1rem 0.4rem;
+  user-select: all;          /* one click selects the whole command */
+  overflow-wrap: anywhere;
+}
+.update-banner .ub-link { color: var(--accent); }
+.update-banner .ub-close {
+  margin-left: auto;
+  appearance: none;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+.update-banner .ub-close:hover { color: var(--text); }

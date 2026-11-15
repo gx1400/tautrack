@@ -1058,6 +1058,47 @@ function focusPrn(prn) {
   state.satPlot.setSeries(idx === undefined ? null : idx, { focus: true });
 }
 
+/* ------------------------------------------------------------------ updates */
+
+/* Shows one line when a newer release exists. Checked server side on a slow loop,
+ * so this is reading a cached answer rather than reaching the network itself.
+ * Dismissal is keyed by version: declining this one must not suppress the next. */
+async function loadUpdate() {
+  const bar = document.getElementById("update-banner");
+  if (!bar) return;
+  let d;
+  try {
+    d = await getJSON("/api/version");
+  } catch {
+    return;   // never a reason to disturb the page
+  }
+  if (!d.available || !d.latest) {
+    bar.hidden = true;
+    return;
+  }
+  if (localStorage.getItem("tautrack.dismissed-update") === d.latest) return;
+
+  document.getElementById("update-text").textContent =
+    `Version ${d.latest} is available — you are running ${d.current}.`;
+  const pull = document.getElementById("update-pull");
+  if (d.pull) {
+    pull.textContent = d.pull;
+    pull.hidden = false;
+  }
+  const link = document.getElementById("update-link");
+  if (d.url) {
+    link.href = d.url;
+    link.hidden = false;
+  } else {
+    link.hidden = true;
+  }
+  document.getElementById("update-dismiss").onclick = () => {
+    localStorage.setItem("tautrack.dismissed-update", d.latest);
+    bar.hidden = true;
+  };
+  bar.hidden = false;
+}
+
 /* ------------------------------------------------------------------ events */
 
 async function loadEvents() {
@@ -1108,6 +1149,7 @@ async function refreshFast() {
 }
 
 async function refreshSlow() {
+  await loadUpdate();
   // States first: the band plugin reads them while the charts draw.
   await loadStates();
   await loadAllCharts();
