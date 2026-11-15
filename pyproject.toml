@@ -39,7 +39,7 @@ dev = [
 tautrack = "tautrack.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/gx1400/tautracker"
+Homepage = "https://github.com/gx1400/tautrack"
 
 [build-system]
 requires = ["setuptools>=68"]

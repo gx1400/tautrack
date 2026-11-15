@@ -133,7 +133,7 @@ docker run -d --name tautrack \
   -v tautrack-data:/data \
   -e TAUTRACK_TRANSPORT__KIND=tcp \
   -e TAUTRACK_TRANSPORT__TCP__HOST=host.docker.internal \
-  ghcr.io/gx1400/tautracker:latest
+  ghcr.io/gx1400/tautrack:latest
 ```
 
 On a Linux host you can use the serial transport directly instead:
@@ -145,7 +145,7 @@ docker run -d --name tautrack \
   -e TAUTRACK_TRANSPORT__KIND=serial \
   -e TAUTRACK_TRANSPORT__SERIAL__PORT=/dev/ttyUSB0 \
   -p 8080:8080 -v tautrack-data:/data \
-  ghcr.io/gx1400/tautracker:latest
+  ghcr.io/gx1400/tautrack:latest
 ```
 
 Use a restart policy (`--restart unless-stopped`) rather than an external supervisor;

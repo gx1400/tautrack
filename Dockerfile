@@ -20,7 +20,7 @@ FROM python:3.12-slim AS runtime
 ARG VERSION=0.0.0-dev
 LABEL org.opencontainers.image.title="tautrack" \
       org.opencontainers.image.description="Monitoring and trend analysis for GPS-disciplined oscillators" \
-      org.opencontainers.image.source="https://github.com/gx1400/tautracker" \
+      org.opencontainers.image.source="https://github.com/gx1400/tautrack" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="${VERSION}"
 
