@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.1](https://github.com/gx1400/tautrack/compare/v0.2.0...v0.2.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* point image and project URLs at the renamed repository ([851b8bd](https://github.com/gx1400/tautrack/commit/851b8bdc95b44352d04cea495661d11b6d3799cd))
+
+
+### Documentation
+
+* add a sigma(tau) mark and dashboard screenshots ([4a24f4c](https://github.com/gx1400/tautrack/commit/4a24f4cbe8c780878ea2bf754da85dd61bbc2d5e))
+* state that only one unit has ever been tested ([12c9e54](https://github.com/gx1400/tautrack/commit/12c9e546ed478e1ce186cca44e6a5731b6a77cbb))
+
+
+### Build System
+
+* **deps:** bump python from 3.12-slim to 3.15-slim ([732d555](https://github.com/gx1400/tautrack/commit/732d5553474881669dc15dc0872eb0403f8dffdb))
+* **deps:** bump python from 3.12-slim to 3.15-slim ([931c214](https://github.com/gx1400/tautrack/commit/931c2140be30115b5f067966f6b781e26b2d4c8b))
+
 ## [0.2.0](https://github.com/gx1400/tautracker/compare/v0.1.0...v0.2.0) (2026-11-15)
 
 
