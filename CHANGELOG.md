@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/gx1400/tautrack/compare/v0.2.1...v0.3.0) (2026-11-15)
+
+
+### Features
+
+* notify when a newer release is published ([7aeaec8](https://github.com/gx1400/tautrack/commit/7aeaec85b15c9266fe2196c34311ea5321b26247))
+
 ## [0.2.1](https://github.com/gx1400/tautrack/compare/v0.2.0...v0.2.1) (2026-11-15)
 
 
