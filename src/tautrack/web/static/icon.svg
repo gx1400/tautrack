@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="tautrack">
+  <title>tautrack — sigma(tau)</title>
+  <rect width="64" height="64" rx="14" fill="#0e1116"/>
+  <g fill="none" stroke="#4aa3ff" stroke-linecap="round">
+    <!-- sigma: bowl, and the arm leaving its top -->
+    <circle cx="23" cy="29" r="11.5" stroke-width="6.5"/>
+    <path d="M25 17.5 H44" stroke-width="6.5"/>
+    <!-- tau: bar and stem, hooking right at the foot -->
+    <path d="M35 44 H55" stroke-width="4.5"/>
+    <path d="M43 44 V51 q0 3 3 3" stroke-width="4.5"/>
+  </g>
+</svg>

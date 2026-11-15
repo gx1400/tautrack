@@ -1,6 +1,10 @@
+<img src="src/tautrack/web/static/icon.svg" width="96" align="left" alt="">
+
 # tautrack
 
 Monitoring, logging and trend analysis for GPS-disciplined oscillators (GPSDOs).
+
+<br clear="left">
 
 `tautrack` polls a GPSDO over serial or TCP, records its behaviour as time series,
 and serves a read-only web UI for watching accuracy, stability and satellite
@@ -26,6 +30,25 @@ behaviour only shows up across hours, days and months:
 - **Holdover prediction** — how well has the unit learned its own oscillator?
 - **Satellite reception by elevation** — the metric that actually diagnoses
   antenna siting, as distinct from raw signal strength.
+
+## Screenshots
+
+![The tautrack dashboard](docs/images/dashboard.png)
+
+Everything on one page, over a selectable span from five minutes to a year: the
+&sigma;(&tau;) stability plot, a lock-state timeline whose colours also shade the
+background of every sparkline below it, per-satellite signal strength, and the
+current state as tiles. Every panel has a tooltip explaining what it measures.
+
+Gaps in the data are drawn as gaps rather than interpolated across, and the charts
+share one cursor, so hovering any of them reads every metric at the same instant.
+
+<p align="center">
+  <img src="docs/images/mobile.png" width="300" alt="The same dashboard on a phone">
+</p>
+
+The layout reflows to a single column on a phone, which is the form most of this
+gets read in.
 
 [Lady Heather](http://www.ke5fx.com/heather/readme.htm) is the established tool in
 this space and remains the reference for deep oscillator analysis. `tautrack`
