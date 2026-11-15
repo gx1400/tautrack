@@ -16,6 +16,7 @@ from . import __version__
 from .config import Settings, load_settings
 from .poller import Poller, housekeeping_loop
 from .store.db import Store
+from .update import UpdateChecker, update_check_loop
 from .web.app import create_app
 
 log = logging.getLogger("tautrack")
@@ -51,7 +52,8 @@ async def _serve(settings: Settings) -> int:
     poller = Poller(settings, store)
     stop = asyncio.Event()
 
-    app = create_app(settings, store, poller)
+    checker = UpdateChecker(settings, __version__)
+    app = create_app(settings, store, poller, checker)
     config = uvicorn.Config(
         app,
         host=settings.web.host,
@@ -76,6 +78,7 @@ async def _serve(settings: Settings) -> int:
     tasks = [
         asyncio.create_task(poller.run(stop), name="poller"),
         asyncio.create_task(housekeeping_loop(settings, store, stop), name="housekeeping"),
+        asyncio.create_task(update_check_loop(checker, stop), name="update-check"),
         asyncio.create_task(server.serve(), name="web"),
     ]
     log.info(

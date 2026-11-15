@@ -1,0 +1,59 @@
+# tautrack, as a long-running service.
+#
+#   cp docker-compose.example.yml docker-compose.yml
+#   cp config.example.toml config.toml      # optional, see the volume below
+#   docker compose up -d
+#
+# Then open http://localhost:8080.
+
+services:
+  tautrack:
+    image: ghcr.io/gx1400/tautrack:latest
+    container_name: tautrack
+    restart: unless-stopped
+
+    environment:
+      # Reach the GPSDO over a serial device server. This is the portable option and
+      # the only one that works from Docker Desktop on Windows or macOS.
+      TAUTRACK_TRANSPORT__KIND: tcp
+      TAUTRACK_TRANSPORT__TCP__HOST: 10.10.110.143
+      TAUTRACK_TRANSPORT__TCP__PORT: "4196"
+
+      # Clock display. The HP Z3801A's 1996 firmware reports a date 1024 GPS weeks
+      # behind actual; this corrects the display only, never the stored samples.
+      TAUTRACK_DISPLAY__TIMEZONE: America/Chicago
+      TAUTRACK_DISPLAY__GPS_ROLLOVER_DAYS: "7168"
+
+      # The image already sets 0.0.0.0 so the published port works. There is no
+      # authentication, so publish it only onto a network you trust.
+      # TAUTRACK_WEB__PORT: "8080"
+
+      # One outbound request a day for a release check. Set false to disable.
+      # TAUTRACK_UPDATE__ENABLED: "false"
+
+      # Export to an existing observability stack rather than alerting here.
+      # TAUTRACK_OTEL__ENABLED: "true"
+      # TAUTRACK_OTEL__ENDPOINT: http://otel-collector:4318
+
+    ports:
+      # Bound to loopback on the host: drop the 127.0.0.1 prefix only when you
+      # actually want it reachable from the LAN.
+      - "127.0.0.1:8080:8080"
+
+    volumes:
+      # History lives here and must outlive the container.
+      - tautrack-data:/data
+      # Optional: everything above can be a file instead. Environment wins over file.
+      # - ./config.toml:/config/tautrack.toml:ro
+
+    # Uncomment INSTEAD of the TCP transport above to use a USB adapter directly.
+    # Linux hosts only - Docker Desktop on Windows and macOS cannot pass a serial
+    # port through, which is why the device server is the documented default.
+    # devices:
+    #   - "/dev/ttyUSB0:/dev/ttyUSB0"
+    # environment:
+    #   TAUTRACK_TRANSPORT__KIND: serial
+    #   TAUTRACK_TRANSPORT__SERIAL__PORT: /dev/ttyUSB0
+
+volumes:
+  tautrack-data:

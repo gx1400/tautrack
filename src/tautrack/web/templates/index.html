@@ -11,7 +11,18 @@
 </head>
 <body>
 
+<!-- Hidden until a check finds something newer; dismissal is remembered per version,
+     so declining 0.2.1 does not also hide 0.3.0. -->
+<div class="update-banner" id="update-banner" role="status" hidden>
+  <span class="ub-text" id="update-text"></span>
+  <code class="ub-pull" id="update-pull" hidden></code>
+  <a class="ub-link" id="update-link" target="_blank" rel="noopener noreferrer">release notes</a>
+  <button type="button" class="ub-close" id="update-dismiss" aria-label="Dismiss">&times;</button>
+</div>
+
 <header class="topbar">
+
+
   <div class="brand">
     <span class="sigma">&sigma;(&tau;)</span>
     <span class="name">tautrack</span>
