@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/gx1400/tautrack/compare/v0.3.0...v0.4.0) (2026-11-17)
+
+
+### Features
+
+* record the internal GPS receiver's identity ([bfcb34b](https://github.com/gx1400/tautrack/commit/bfcb34b7bd696623a3019dc760181e0676392bfa))
+
+
+### Tests
+
+* replay the reference unit's real :DIAG:IDEN:GPS? reply ([db83eff](https://github.com/gx1400/tautrack/commit/db83efff00d3ead555f7334d2a4bd03227c3736c))
+
 ## [0.3.0](https://github.com/gx1400/tautrack/compare/v0.2.1...v0.3.0) (2026-11-15)
 
 
