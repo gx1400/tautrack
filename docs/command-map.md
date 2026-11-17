@@ -34,14 +34,15 @@ form — roughly 14× faster, with no parsing ambiguity.
 | `:DIAG:LOG:COUN?` | `+184` | diagnostic log entry count |
 | `:OUTP:STAT?` | `0` | output validity |
 
-## Undocumented, adopted from published captures (1)
+## Undocumented (1)
 
 | Query | Example reply | Notes |
 | --- | --- | --- |
-| `:DIAG:IDEN:GPS?` | `"COPYRIGHT 1991-1995 MOTOROLA INC.","SFTW P/N # 98-P39972M ",`<br>`"SOFTWARE VER # 8 ","SOFTWARE REV # 4 ","SOFTWARE DATE 13 JUL 1995",`<br>`"MODEL # B1121P1114 ","HDWR P/N # _ ","SERIAL # SSG0215870 ",`<br>`"MANUFACTUR DATE 7C12 ","OPTIONS LIST IB "` | identity of the **internal Motorola Oncore** receiver, relayed by the instrument CPU (the SCPI port never speaks the receiver's own `@@` protocol). VER + REV is the receiver firmware, here **8.4**. Read once per connection |
+| `:DIAG:IDEN:GPS?` | `"COPYRIGHT 1991-1995 MOTOROLA INC.","SFTW P/N # 98-P39972M ",`<br>`"SOFTWARE VER # 8 ","SOFTWARE REV # 4 ","SOFTWARE DATE 13 JUL 1995",`<br>`"MODEL # B1121P1114 ","HDWR P/N # _ ","SERIAL # SSG0243552 ",`<br>`"MANUFACTUR DATE 7J08 ","OPTIONS LIST IB "` | identity of the **internal Motorola Oncore** receiver, relayed by the instrument CPU (the SCPI port never speaks the receiver's own `@@` protocol). VER + REV is the receiver firmware, here **8.4**. Read once per connection |
 
-Not in the user guide, and **not yet captured from S/N 3542A05653**: the example is a
-different Z3801A posted to the TAPR tacgps list in 2006. A Lucent KS-24361 answers the
+Not in the user guide. Captured from S/N 3542A05653 on 2026-11-17 in **0.27 s**
+(fields padded with spaces; shown collapsed above). Another Z3801A posted to the TAPR
+tacgps list in 2006 reports the same receiver and firmware. A Lucent KS-24361 answers the
 same query with a different Oncore (`R5122U1152`, software 2.2) and spells the hardware
 label `HWDR`, so the parser matches fields by label and treats all of them as optional.
 A unit that rejects the query is logged and monitored as normal.

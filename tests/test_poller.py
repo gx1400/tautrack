@@ -133,14 +133,29 @@ async def test_gps_receiver_identity_is_recorded(settings, tmp_path) -> None:
     store.close()
 
 
-async def test_rejected_receiver_query_does_not_stop_polling(settings, session_fixture) -> None:
-    """The query is undocumented; a unit that refuses it must still be monitored."""
+async def test_reference_unit_receiver_is_recorded(settings, session_fixture) -> None:
     if not session_fixture.exists():
         pytest.skip("session fixture not generated")
     store = Store(settings.database)
     poller = Poller(settings, store)
     await run_briefly(poller)
-    # The reference fixture predates this query, so replay answers it E-113.
+    assert store.device(poller.device_id)["gps_receiver"]["model"] == "B1121P1114"
+    store.close()
+
+
+async def test_rejected_receiver_query_does_not_stop_polling(settings, tmp_path) -> None:
+    """The query is undocumented; a unit that refuses it must still be monitored."""
+    import json
+
+    p = tmp_path / "s.jsonl"
+    p.write_text(
+        json.dumps({"command": "*IDN?", "body": "A,Z3801A,S,F", "prompt": "scpi >"}) + "\n",
+        encoding="utf-8",
+    )
+    store = Store(settings.database)
+    poller = Poller(_replay_settings(settings, p), store)
+    await run_briefly(poller)
+    # Replay answers anything not in the fixture with E-113, as the firmware does.
     assert poller.last_poll_ts is not None
     assert store.device(poller.device_id)["gps_receiver"] is None
     assert any(":DIAG:IDEN:GPS?" in e["message"] for e in store.recent_events())
