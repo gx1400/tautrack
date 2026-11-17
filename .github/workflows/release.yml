@@ -90,3 +90,39 @@ jobs:
           subject-name: ghcr.io/${{ github.repository }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+
+  sbom:
+    name: Attach SBOM to release
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      # Uploading a release asset needs write access to repository contents.
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The tagged commit, so the SBOM describes exactly what was released.
+          # Its commit time also becomes the SBOM timestamp, which keeps the document
+          # reproducible for a given release.
+          ref: ${{ needs.release-please.outputs.tag }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.15"
+
+      - name: Generate CycloneDX SBOM
+        env:
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: python tools/sbom.py --out "dist/tautrack-${VERSION}.cdx.json"
+
+      - name: Attach to the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          gh release upload "${TAG}" "dist/tautrack-${VERSION}.cdx.json" \
+            --repo "${GITHUB_REPOSITORY}" --clobber
+

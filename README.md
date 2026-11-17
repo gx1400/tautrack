@@ -230,6 +230,21 @@ request path, never blocks startup or polling, and every failure is silent. A ho
 with no route to the internet behaves identically, minus the banner. Turn it off with
 `TAUTRACK_UPDATE__ENABLED=false` or `enabled = false` under `[update]`.
 
+### Software bill of materials
+
+Every [release](https://github.com/gx1400/tautrack/releases) carries a
+[CycloneDX](https://cyclonedx.org/) SBOM, `tautrack-<version>.cdx.json`, listing the
+Python packages tautrack runs on with their exact versions, licences and package URLs.
+It is generated from a clean, runtime-only install on the container's Python, so it
+describes what the image ships, not the development environment. Python packages only:
+the base image's Debian packages are not included.
+
+To generate one locally:
+
+```bash
+python tools/sbom.py        # -> dist/tautrack-<version>.cdx.json
+```
+
 ## Importing existing data
 
 `tools/backfill.py` imports a captured session at its original timestamps, so long-span

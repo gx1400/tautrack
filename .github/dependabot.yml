@@ -20,6 +20,17 @@ updates:
       dev:
         dependency-type: development
 
+  # The SBOM generator, pinned in tools/sbom-requirements.txt.
+  - package-ecosystem: pip
+    directory: "/tools"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "ci"
+      include: scope
+
   # GitHub Actions are pinned by commit SHA, which means they cannot be updated by
   # hand realistically - Dependabot is what keeps the pins current, and it rewrites
   # both the SHA and the trailing version comment.
