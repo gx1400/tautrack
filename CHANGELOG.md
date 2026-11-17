@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/gx1400/tautrack/compare/v0.4.0...v0.4.1) (2026-11-17)
+
+
+### Build System
+
+* attach a CycloneDX SBOM to each release ([03dfc09](https://github.com/gx1400/tautrack/commit/03dfc09043ac2f3fc3a22bc74b6ea5ae5d03aee9))
+
 ## [0.4.0](https://github.com/gx1400/tautrack/compare/v0.3.0...v0.4.0) (2026-11-17)
 
 
