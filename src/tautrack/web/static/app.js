@@ -170,9 +170,16 @@ function renderStatus(s) {
   dot.className = "dot " + (s.connected ? "ok" : "bad");
   txt.textContent = s.connected ? "polling" : (s.last_error ? "disconnected" : "waiting");
 
-  document.getElementById("device").textContent = s.device
-    ? `${s.device.model || "?"}  ·  S/N ${s.device.serial || "?"}  ·  fw ${s.device.firmware || "?"}`
+  const deviceEl = document.getElementById("device");
+  const rx = s.device && s.device.gps_receiver;
+  deviceEl.textContent = s.device
+    ? `${s.device.model || "?"}  ·  S/N ${s.device.serial || "?"}  ·  fw ${s.device.firmware || "?"}` +
+      (rx && (rx.model || rx.firmware) ? `  ·  GPS ${rx.model || "?"} v${rx.firmware || "?"}` : "")
     : "no device has reported yet";
+  // The full receiver ID block is too long for the header; it is one hover away.
+  deviceEl.title = rx
+    ? Object.entries(rx).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join("\n")
+    : "";
 
   const L = s.latest || {};
   const num = (k) => (L[k] ? L[k].value : null);

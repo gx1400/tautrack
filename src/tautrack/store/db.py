@@ -8,6 +8,7 @@ knowing whether the answer comes from raw samples or an aggregate (Q5).
 from __future__ import annotations
 
 import itertools
+import json
 import math
 import sqlite3
 import threading
@@ -170,6 +171,21 @@ class Store:
         sql = resources.files("tautrack.store").joinpath("schema.sql").read_text(encoding="utf-8")
         with self._conn:
             self._conn.executescript(sql)
+            self._migrate()
+
+    #: Columns added to existing tables after the first release. ``CREATE TABLE IF NOT
+    #: EXISTS`` leaves an older database's table untouched, so each is added here when
+    #: missing; a fresh database already has them from schema.sql.
+    _ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
+        ("devices", "gps_receiver", "TEXT"),
+        ("devices", "gps_receiver_raw", "TEXT"),
+    )
+
+    def _migrate(self) -> None:
+        for table, column, decl in self._ADDED_COLUMNS:
+            have = {r["name"] for r in self._conn.execute(f"PRAGMA table_info({table})")}
+            if column not in have:
+                self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
     # ---------------------------------------------------------------- devices
 
@@ -199,13 +215,25 @@ class Store:
         row = self._conn.execute("SELECT id FROM devices WHERE serial = ?", (serial,)).fetchone()
         return int(row["id"])
 
+    def set_gps_receiver(self, device_id: int, fields: dict[str, str], raw: str) -> None:
+        """Record the internal GPS receiver's identity against its instrument.
+
+        Overwritten on every connection, so a swapped receiver shows up as soon as the
+        unit is reconnected rather than keeping the identity of the one it replaced.
+        """
+        with self._conn:
+            self._conn.execute(
+                "UPDATE devices SET gps_receiver = ?, gps_receiver_raw = ? WHERE id = ?",
+                (json.dumps(fields, sort_keys=True), raw, device_id),
+            )
+
     def device(self, device_id: int) -> dict[str, Any] | None:
         row = self._conn.execute("SELECT * FROM devices WHERE id = ?", (device_id,)).fetchone()
-        return dict(row) if row else None
+        return _device_dict(row)
 
     def any_device(self) -> dict[str, Any] | None:
         row = self._conn.execute("SELECT * FROM devices ORDER BY id LIMIT 1").fetchone()
-        return dict(row) if row else None
+        return _device_dict(row)
 
     # ---------------------------------------------------------------- metrics
 
@@ -764,3 +792,16 @@ def _log_steps(lo: int, hi: int, per_decade: int = 6) -> list[int]:
     if out[-1] != hi:
         out.append(hi)
     return out
+
+
+def _device_dict(row: Any) -> dict[str, Any] | None:
+    """A device row, with the receiver identity decoded from its stored JSON."""
+    if row is None:
+        return None
+    d = dict(row)
+    raw = d.get("gps_receiver")
+    try:
+        d["gps_receiver"] = json.loads(raw) if raw else None
+    except ValueError:
+        d["gps_receiver"] = None
+    return d

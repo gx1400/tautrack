@@ -345,6 +345,7 @@ def create_app(
                 "model": dev["model"],
                 "serial": dev["serial"],
                 "firmware": dev["firmware"],
+                "gps_receiver": dev.get("gps_receiver"),
             },
             "connected": bool(getattr(poller, "connected", False)),
             "last_error": getattr(poller, "last_error", None),
