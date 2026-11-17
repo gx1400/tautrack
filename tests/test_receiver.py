@@ -1,10 +1,12 @@
 """GPS receiver identity: parsing the ``:DIAG:IDEN:GPS?`` reply.
 
-These replies are published captures from other units, not from the reference unit,
-so they test the parser's tolerance across receivers rather than one exact layout.
+The reference unit's reply comes from the replay fixture; the others are published
+captures from other units, testing tolerance across receivers rather than one layout.
 """
 
 from __future__ import annotations
+
+import json
 
 from tautrack.device.receiver import parse_gps_identity
 
@@ -28,7 +30,22 @@ KS24361 = (
 )
 
 
-def test_parses_the_z3801a_reply() -> None:
+def test_parses_the_reference_unit_reply(session_fixture) -> None:
+    """Captured from S/N 3542A05653 (firmware 3543-A) on 2026-11-17."""
+    rec = next(
+        r
+        for r in map(json.loads, session_fixture.read_text(encoding="utf-8").splitlines())
+        if r["command"] == ":DIAG:IDEN:GPS?"
+    )
+    got = parse_gps_identity(rec["body"])
+    assert got["model"] == "B1121P1114"
+    assert got["firmware"] == "8.4"
+    assert got["serial"] == "SSG0243552"
+    assert got["hardware_part"] == ""
+    assert len(got) == 11
+
+
+def test_parses_the_published_z3801a_reply() -> None:
     assert parse_gps_identity(Z3801A) == {
         "copyright": "COPYRIGHT 1991-1995 MOTOROLA INC.",
         "software_part": "98-P39972M",
