@@ -143,3 +143,22 @@ async def test_identify_tolerates_a_short_reply() -> None:
     ident = await s.identify()
     assert ident["manufacturer"] == "ACME"
     assert ident["firmware"] == ""
+
+
+async def test_identify_receiver_parses_the_gps_id_block() -> None:
+    body = '"MODEL #    B1121P1114     ","SOFTWARE VER # 8 ","SOFTWARE REV # 4 "'
+    s = Session(FakeTransport({":DIAG:IDEN:GPS?": body + "\r\nscpi > "}))
+    await s.open()
+    fields, reply = await s.identify_receiver()
+    assert reply.ok
+    assert fields["model"] == "B1121P1114"
+    assert fields["firmware"] == "8.4"
+
+
+async def test_identify_receiver_tolerates_rejection() -> None:
+    """A sibling unit may not implement the undocumented query at all."""
+    s = Session(FakeTransport({}))
+    await s.open()
+    fields, reply = await s.identify_receiver()
+    assert fields == {}
+    assert reply.error_code == 113

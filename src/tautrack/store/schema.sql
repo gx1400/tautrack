@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS devices (
     model        TEXT,
     serial       TEXT UNIQUE,
     firmware     TEXT,
+    -- The internal GPS receiver's identity (:DIAG:IDEN:GPS?): parsed fields as JSON,
+    -- and the verbatim reply. Added after v0.3; older databases gain them on open.
+    gps_receiver     TEXT,
+    gps_receiver_raw TEXT,
     first_seen   INTEGER NOT NULL,
     last_seen    INTEGER NOT NULL
 );

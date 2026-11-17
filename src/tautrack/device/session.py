@@ -16,6 +16,7 @@ import asyncio
 import time
 
 from ..transport import PROMPT_ANY, Reply, Transport, TransportError
+from .receiver import parse_gps_identity
 
 #: Commands this application may transmit. Everything is a query except ``*CLS``,
 #: which clears the error queue and changes no instrument configuration.
@@ -48,6 +49,8 @@ ALLOWED_COMMANDS: frozenset[str] = frozenset(
         ":DIAG:ROSC:EFC:REL?",
         ":DIAG:ROSC:EFC:ABS?",
         ":DIAG:LOG:COUN?",
+        # Undocumented, but read-only: relays the internal GPS receiver's ID block.
+        ":DIAG:IDEN:GPS?",
         ":OUTP:STAT?",
     }
 )
@@ -145,3 +148,14 @@ class Session:
         parts = [p.strip() for p in reply.body.split(",")]
         keys = ("manufacturer", "model", "serial", "firmware")
         return dict(zip(keys, parts + [""] * (len(keys) - len(parts)), strict=False))
+
+    async def identify_receiver(self) -> tuple[dict[str, str], Reply]:
+        """Read the internal GPS receiver's identity once per connection.
+
+        Returns the parsed fields (empty when the instrument rejected the query or
+        answered with nothing recognisable) together with the raw reply, so the caller
+        can both store the verbatim text and drain any error it queued.
+        """
+        reply = await self.query(":DIAG:IDEN:GPS?")
+        fields = parse_gps_identity(reply.body) if reply.ok else {}
+        return fields, reply

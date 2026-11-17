@@ -47,6 +47,7 @@ class Poller:
                 await session.open()
                 ident = await session.identify()
                 self.device_id = self.store.upsert_device(ident)
+                await self._identify_receiver(session)
                 self.connected = True
                 backoff = self.settings.transport.reconnect_min
                 self.store.log_event(
@@ -79,6 +80,37 @@ class Poller:
             with contextlib.suppress(TimeoutError, asyncio.TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=backoff)
             backoff = min(backoff * 2, self.settings.transport.reconnect_max)
+
+    async def _identify_receiver(self, session: Session) -> None:
+        """Record which GPS receiver is inside the unit, once per connection.
+
+        Best effort: the query is undocumented, so a sibling unit may reject it. That
+        is logged and polling carries on - the receiver's identity is useful context,
+        never a reason to refuse to monitor the instrument.
+        """
+        assert self.device_id is not None
+        fields, reply = await session.identify_receiver()
+        if not reply.ok:
+            self.store.log_event(
+                "warning",
+                "poller",
+                f":DIAG:IDEN:GPS? rejected ({reply.prompt or 'no prompt'}); receiver identity unknown",
+            )
+            # Drain the queued error so the first poll's prompts are not misread.
+            await session.query("*CLS")
+            return
+        if not fields:
+            self.store.log_event(
+                "warning", "parser", ":DIAG:IDEN:GPS? reply not recognised", reply.body
+            )
+        self.store.set_gps_receiver(self.device_id, fields, reply.body)
+        if fields:
+            self.store.log_event(
+                "info",
+                "poller",
+                f"GPS receiver {fields.get('model', '?')} firmware {fields.get('firmware', '?')}",
+                reply.body,
+            )
 
     async def _poll_forever(self, session: Session, stop: asyncio.Event) -> None:
         while not stop.is_set():

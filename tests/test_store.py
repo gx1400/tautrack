@@ -33,6 +33,41 @@ def test_device_upsert_is_idempotent_on_serial(store) -> None:
     assert store.device(a)["firmware"] == "2"
 
 
+def test_gps_receiver_round_trips_as_a_dict(store, device) -> None:
+    assert store.device(device)["gps_receiver"] is None
+    store.set_gps_receiver(device, {"model": "B1121P1114", "firmware": "8.4"}, "raw")
+    d = store.device(device)
+    assert d["gps_receiver"] == {"model": "B1121P1114", "firmware": "8.4"}
+    assert d["gps_receiver_raw"] == "raw"
+
+
+def test_older_database_gains_the_receiver_columns(tmp_path) -> None:
+    """A v0.3 database has no receiver columns; opening it must add them, not fail."""
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.execute(
+        "CREATE TABLE devices (id INTEGER PRIMARY KEY, manufacturer TEXT, model TEXT, "
+        "serial TEXT UNIQUE, firmware TEXT, first_seen INTEGER NOT NULL, "
+        "last_seen INTEGER NOT NULL)"
+    )
+    con.execute(
+        "INSERT INTO devices (model, serial, firmware, first_seen, last_seen) "
+        "VALUES ('Z3801A', 'S1', '3543-A', 1, 1)"
+    )
+    con.commit()
+    con.close()
+
+    s = Store(path)
+    dev = s.any_device()
+    assert dev["serial"] == "S1"
+    assert dev["gps_receiver"] is None
+    s.set_gps_receiver(dev["id"], {"model": "X"}, "raw")
+    assert s.any_device()["gps_receiver"] == {"model": "X"}
+    s.close()
+
+
 def test_latest_returns_most_recent_value_per_metric(store, device) -> None:
     now = int(time.time())
     store.write_samples(device, now - 60, {"efc_percent": 54.0})

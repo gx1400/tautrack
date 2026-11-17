@@ -97,6 +97,56 @@ async def test_unsupported_query_is_dropped_after_one_rejection(settings, tmp_pa
     store.close()
 
 
+def _replay_settings(settings: Settings, path: Path) -> Settings:
+    return settings.model_copy(
+        update={
+            "transport": settings.transport.model_copy(
+                update={"replay": settings.transport.replay.model_copy(update={"path": path})}
+            )
+        }
+    )
+
+
+async def test_gps_receiver_identity_is_recorded(settings, tmp_path) -> None:
+    import json
+
+    body = '"MODEL #    B1121P1114     ","SOFTWARE VER # 8 ","SOFTWARE REV # 4 "'
+    p = tmp_path / "s.jsonl"
+    p.write_text(
+        "\n".join(
+            json.dumps(r)
+            for r in (
+                {"command": "*IDN?", "body": "A,Z3801A,S,F", "prompt": "scpi >"},
+                {"command": ":DIAG:IDEN:GPS?", "body": body, "prompt": "scpi >"},
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    store = Store(settings.database)
+    poller = Poller(_replay_settings(settings, p), store)
+    await run_briefly(poller)
+    dev = store.device(poller.device_id)
+    assert dev["gps_receiver"]["model"] == "B1121P1114"
+    assert dev["gps_receiver"]["firmware"] == "8.4"
+    assert dev["gps_receiver_raw"] == body
+    store.close()
+
+
+async def test_rejected_receiver_query_does_not_stop_polling(settings, session_fixture) -> None:
+    """The query is undocumented; a unit that refuses it must still be monitored."""
+    if not session_fixture.exists():
+        pytest.skip("session fixture not generated")
+    store = Store(settings.database)
+    poller = Poller(settings, store)
+    await run_briefly(poller)
+    # The reference fixture predates this query, so replay answers it E-113.
+    assert poller.last_poll_ts is not None
+    assert store.device(poller.device_id)["gps_receiver"] is None
+    assert any(":DIAG:IDEN:GPS?" in e["message"] for e in store.recent_events())
+    store.close()
+
+
 def test_health_score_is_none_when_nothing_is_known() -> None:
     assert _health_score(Screen()) is None
 
