@@ -139,3 +139,24 @@ jobs:
           path: sbom.cdx.json
           if-no-files-found: error
 
+
+  ci-ok:
+    # The one check the main ruleset requires: it passes only when every job above passed,
+    # so changing the Python matrix or adding a job never strands a required check name.
+    name: ci-ok
+    if: always()
+    needs: [lint, test, docker, sbom]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "::error::A CI job ended with '$result'."
+              exit 1
+            fi
+          done
