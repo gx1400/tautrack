@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/gx1400/tautrack/compare/v0.4.1...v0.5.0) (2026-11-20)
+
+
+### Features
+
+* time-of-day profile of lock likelihood and satellites ([c84df3f](https://github.com/gx1400/tautrack/commit/c84df3f57659f5b4dd9c93a81be195a8bdb8b10e))
+
 ## [0.4.1](https://github.com/gx1400/tautrack/compare/v0.4.0...v0.4.1) (2026-11-17)
 
 
