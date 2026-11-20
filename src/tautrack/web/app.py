@@ -254,6 +254,22 @@ METRIC_HELP: dict[str, dict[str, str]] = {
             "but not an absolute measure."
         ),
     },
+    "time_of_day": {
+        "title": "Time of day",
+        "text": (
+            "Every day in the selected window folded onto one 24-hour clock, in 30-minute "
+            "slots of the display timezone. An antenna with part of its sky blocked loses "
+            "satellites when the constellation passes behind the obstruction, which "
+            "happens at about the same time each day - so a recurring weak slot points at "
+            "siting, not at the receiver. The top row is the share of observed time in "
+            "each state (green = locked); the middle row is the average number of "
+            "satellites tracked; the grid shows how often each satellite was tracked in "
+            "each slot. Hover or tap a slot for detail. Two caveats: this needs raw "
+            "samples, so it reaches back only as far as raw retention; and the GPS sky "
+            "repeats every 23 h 56 m, so a satellite rises about 4 minutes earlier each "
+            "day and over two weeks its pass drifts across a couple of slots."
+        ),
+    },
     "sky": {
         "title": "Sky view",
         "text": (
@@ -440,6 +456,35 @@ def create_app(
         if span not in SPANS:
             raise HTTPException(status_code=400, detail=f"unknown span {span!r}")
         return store.satellite_series(device_id(), SPANS[span])
+
+    @app.get("/api/time-of-day")
+    def api_time_of_day(span: str = Query("24h")) -> dict[str, Any]:
+        """Satellites and lock likelihood per 30-minute slot of the local day.
+
+        Windowed to the selected span, but bounded by raw retention: the profile needs
+        sub-hour resolution and the mode text, neither of which survives the rollup.
+        The response says when the window was cut short, so a "1y" view cannot pass
+        off two weeks of data as a year.
+        """
+        if span not in SPANS:
+            raise HTTPException(status_code=400, detail=f"unknown span {span!r}")
+        now = int(time.time())
+        requested = SPANS[span]
+        raw_seconds = settings.retention.raw_days * 86400
+        tz = _tz(settings.display.timezone)
+        profile = store.time_of_day(device_id(), min(requested, raw_seconds), tz, now=now)
+        profile["window"] = {
+            "span": span,
+            "requested_seconds": requested,
+            "seconds": min(requested, raw_seconds),
+            "limited_by_retention": requested > raw_seconds,
+            "raw_days": settings.retention.raw_days,
+            "timezone": settings.display.timezone,
+            "zone_label": datetime.now(UTC).astimezone(tz).strftime("%Z")
+            or settings.display.timezone,
+            "now": now,
+        }
+        return profile
 
     @app.get("/api/events")
     def api_events(limit: int = Query(30, ge=1, le=200)) -> dict[str, Any]:

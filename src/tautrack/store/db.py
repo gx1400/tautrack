@@ -14,9 +14,12 @@ import sqlite3
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import tzinfo
 from importlib import resources
 from pathlib import Path
 from typing import Any
+
+from .profile import build_profile
 
 #: Spans at or below this get raw samples; longer spans use aggregates. Chosen so a
 #: chart never tries to draw more than a few thousand points: at a 15 s cadence, 24 h
@@ -691,6 +694,51 @@ class Store:
                 for prn in order
             ],
         }
+
+    def time_of_day(
+        self,
+        device_id: int,
+        seconds: int,
+        tz: tzinfo,
+        now: int | None = None,
+        slot_minutes: int = 30,
+    ) -> dict[str, Any]:
+        """Satellites and lock state folded onto a 24-hour clock, over a window.
+
+        Reads the raw tier only: the mode is text, which the rollups do not keep, and
+        an hourly bucket cannot be split into half-hour slots. See ``store.profile``.
+        """
+        now = now or int(time.time())
+        since = now - seconds
+
+        def scalar(metric: str) -> list[tuple[int, float]]:
+            rows = self._conn.execute(
+                "SELECT ts, value FROM samples "
+                "WHERE device_id = ? AND metric_id = ? AND ts >= ? AND value IS NOT NULL",
+                (device_id, self.metric_id(metric), since),
+            ).fetchall()
+            return [(int(r["ts"]), float(r["value"])) for r in rows]
+
+        modes = self._conn.execute(
+            "SELECT ts, text FROM samples "
+            "WHERE device_id = ? AND metric_id = ? AND ts >= ? AND text IS NOT NULL",
+            (device_id, self.metric_id("mode", kind="state"), since),
+        ).fetchall()
+        # The discrete count query is preferred; the screen's count is the fallback
+        # for a firmware that rejects :GPS:SAT:TRAC:COUN?.
+        tracked = scalar("satellites_tracked") or scalar("satellites_tracked_screen")
+        sats = self._conn.execute(
+            "SELECT ts, prn, tracked FROM sat_samples WHERE device_id = ? AND ts >= ?",
+            (device_id, since),
+        ).fetchall()
+        return build_profile(
+            modes=((int(r["ts"]), r["text"]) for r in modes),
+            tracked=tracked,
+            visible=scalar("satellites_visible"),
+            sats=((int(r["ts"]), int(r["prn"]), int(r["tracked"])) for r in sats),
+            tz=tz,
+            slot_minutes=slot_minutes,
+        )
 
     def satellite_history(
         self, device_id: int, seconds: int, now: int | None = None

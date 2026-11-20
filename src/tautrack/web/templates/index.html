@@ -126,6 +126,23 @@
     <div class="lock-scale" id="lock-scale"></div>
   </section>
 
+  <!-- Every day of the window folded onto one 24-hour clock. Drawn as a CSS grid of
+       48 columns so the three rows line up slot for slot and hovering one column
+       lights it in all of them. -->
+  <section class="panel tod-panel" aria-label="Time of day">
+    <div class="panel-head">
+      <h2>Time of day
+        <button type="button" class="help-btn" data-help="time_of_day"
+                aria-label="About the time-of-day profile">&#9432;</button>
+      </h2>
+      <div class="tod-legend" id="tod-legend"></div>
+    </div>
+    <div class="tod-meta" id="tod-meta"></div>
+    <div class="tod-summary" id="tod-summary"></div>
+    <div class="tod-grid" id="tod-grid"></div>
+    <div class="tod-detail" id="tod-detail" aria-live="polite"></div>
+  </section>
+
   <section class="panel satsig-panel" aria-label="Signal by satellite">
     <div class="panel-head">
       <h2>Signal by satellite

@@ -422,6 +422,127 @@ footer { color: var(--muted); font-size: 0.72rem; text-align: center; padding: 1
 }
 .lock-key .swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
 
+/* ---------------------------------------------------------------- time of day */
+
+.tod-panel .panel-head { flex-wrap: wrap; gap: 0.5rem; }
+.tod-meta { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin: -0.3rem 0 0.6rem; }
+
+.tod-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  font-size: 0.8rem;
+  margin-bottom: 0.7rem;
+}
+.tod-summary b { font-family: var(--mono); font-variant-numeric: tabular-nums; margin-right: 0.25rem; }
+.tod-summary .k,
+.tod-detail .k {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-right: 0.4rem;
+}
+
+/* 48 equal columns that shrink with the panel, so the whole day fits on a phone
+   without horizontal scrolling; the label column takes only what it needs. */
+.tod-grid {
+  display: grid;
+  grid-template-columns: max-content repeat(48, minmax(0, 1fr));
+  column-gap: 1px;
+  row-gap: 1px;
+  align-items: stretch;
+  user-select: none;
+}
+.tod-label {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+  padding-right: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.tod-label.prn { font-size: 0.58rem; line-height: 1; }
+
+.tod-cell { position: relative; background: var(--panel-2); cursor: crosshair; }
+/* No screens at all in the slot: hatched, so "unobserved" never reads as "zero". */
+.tod-cell.nodata {
+  background: repeating-linear-gradient(
+    135deg, transparent 0 3px, color-mix(in srgb, var(--muted) 18%, transparent) 3px 4px);
+}
+.tod-cell.hot::after {
+  /* An overlay rather than a restyle of the cell, so the selected column keeps
+     its readings visible underneath the highlight. */
+  content: "";
+  position: absolute;
+  inset: 0 -1px;
+  border-left: 1px solid var(--accent);
+  border-right: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  pointer-events: none;
+}
+
+.tod-lock {
+  height: 64px;
+  display: flex;
+  flex-direction: column;     /* first state (Locked) on top */
+  border-radius: 2px 2px 0 0;
+  overflow: hidden;
+}
+.tod-lock > span { display: block; width: 100%; flex: none; }
+
+.tod-sats { height: 44px; margin-bottom: 2px; }
+.tod-sats > span { position: absolute; left: 0; right: 0; bottom: 0; }
+.tod-sats .vis { background: color-mix(in srgb, var(--muted) 35%, transparent); }
+.tod-sats .trk { background: var(--accent); left: 18%; right: 18%; }
+
+.tod-hour {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: visible;
+  height: 1rem;
+  line-height: 1rem;
+}
+.tod-hour.tick { border-left: 1px solid var(--line); padding-left: 2px; }
+
+.tod-legend { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.tod-vis-swatch { background: color-mix(in srgb, var(--muted) 35%, transparent); }
+
+.tod-prn { height: 9px; }
+.tod-prn[style*="--a"] { background: color-mix(in srgb, var(--accent) calc(var(--a) * 100%), var(--panel-2)); }
+.tod-prn.usual { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 35%, transparent); }
+
+.tod-detail {
+  margin-top: 0.7rem;
+  min-height: 4.6rem;
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.tod-detail .muted { color: var(--muted); }
+.tod-detail b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tod-detail b.ok { color: var(--ok); }
+.tod-detail b.warn { color: var(--warn); }
+.tod-detail b.bad { color: var(--bad); }
+.tod-d-row { display: flex; gap: 0.2rem; align-items: baseline; flex-wrap: wrap; }
+.tod-d-row .k { min-width: 7.5rem; }
+.tod-chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
+.tod-chip {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 0.3rem;
+  display: inline-flex;
+  gap: 0.3rem;
+}
+.tod-chip span { color: var(--muted); }
+.tod-chip.usual { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+
 /* Repeat count on a collapsed run of identical events. */
 .events .rep {
   margin-left: auto;
