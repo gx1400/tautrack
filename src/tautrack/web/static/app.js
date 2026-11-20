@@ -964,6 +964,269 @@ async function loadStates() {
 }
 
 
+/* ------------------------------------------------------------- time of day */
+
+/* Stacking order and colours for the lock row. The same palette as the lock strip,
+ * except that Locked is painted here: in a share-of-time bar the green is the
+ * reading, not background. */
+const TOD_STATES = [
+  { key: "locked",   label: "Locked",   colour: "var(--ok)" },
+  { key: "recovery", label: "Recovery", colour: "#bf8700" },
+  { key: "holdover", label: "Holdover", colour: "#d1242f" },
+  { key: "power-up", label: "Power-up", colour: "#8b949e" },
+  { key: "other",    label: "Other",    colour: "#6e7681" },
+];
+/* A PRN tracked at least this often in a slot counts as "usually" tracked there. */
+const TOD_USUAL = 0.5;
+/* The profile reads up to two weeks of raw samples, so it is refreshed on a slower
+ * clock than the charts unless the span changes. */
+const TOD_REFRESH_MS = 120000;
+
+const pct = (v) => (v === null || v === undefined ? "—" : `${Math.round(v * 100)}%`);
+
+/* The detail and summary lines are built as HTML for their markup. Everything
+ * interpolated is a number or a server-built "HH:MM" label, except the zone label,
+ * which comes from configuration and is escaped anyway. */
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+function slotRange(d, i) {
+  const s = d.slots[i];
+  const n = d.slots[(i + 1) % d.slots.length];
+  return `${s.start}–${n.start}`;
+}
+
+function todDetail(d, i) {
+  const el = document.getElementById("tod-detail");
+  if (i === null) {
+    el.innerHTML = '<span class="muted">Hover or tap a slot for detail.</span>';
+    return;
+  }
+  const s = d.slots[i];
+  const zone = esc(d.window.zone_label || d.window.timezone);
+  if (!s.screens) {
+    el.innerHTML = `<b>${slotRange(d, i)}</b> ${zone} · <span class="muted">no data in this slot</span>`;
+    return;
+  }
+  const st = s.states;
+  const others = TOD_STATES.slice(1).filter((x) => st[x.key])
+    .map((x) => `${x.label.toLowerCase()} ${pct(st[x.key])}`).join(", ");
+  const trk = s.tracked;
+  const vis = s.visible;
+  const shares = Object.entries(s.prn_share)
+    .map(([p, v]) => [Number(p), v]).sort((a, b) => b[1] - a[1]);
+  const chip = ([p, v]) => `<span class="tod-chip${v >= TOD_USUAL ? " usual" : ""}">` +
+    `${p}<span>${pct(v)}</span></span>`;
+  const usual = shares.filter(([, v]) => v >= TOD_USUAL);
+  const sometimes = shares.filter(([, v]) => v < TOD_USUAL);
+  el.innerHTML =
+    `<div class="tod-d-head"><b>${slotRange(d, i)}</b> ${zone} · ` +
+    `${s.days} day${s.days === 1 ? "" : "s"} observed</div>` +
+    `<div class="tod-d-row"><span class="k">Lock</span><span>` +
+    `<b class="${st.locked >= 0.9 ? "ok" : st.locked >= 0.5 ? "warn" : "bad"}">${pct(st.locked)}</b>` +
+    ` of the time${others ? ` <span class="muted">(${others})</span>` : ""}` +
+    ` · locked at some point on ${s.days_any_lock}/${s.days} days, ` +
+    `the whole slot on ${s.days_all_lock}/${s.days}</span></div>` +
+    `<div class="tod-d-row"><span class="k">Satellites</span><span>` +
+    (trk ? `<b>${fmt(trk.avg, 1)}</b> tracked on average (min ${fmt(trk.min)}, max ${fmt(trk.max)})`
+         : "tracked count not recorded") +
+    (vis ? ` · ${fmt(vis.avg, 1)} visible` : "") + `</span></div>` +
+    `<div class="tod-d-row"><span class="k">Usually tracked</span><span class="tod-chips">` +
+    (usual.length ? usual.map(chip).join("") : '<span class="muted">none above 50%</span>') +
+    `</span></div>` +
+    (sometimes.length
+      ? `<div class="tod-d-row"><span class="k">Sometimes</span><span class="tod-chips">` +
+        sometimes.map(chip).join("") + `</span></div>`
+      : "");
+}
+
+async function loadTimeOfDay(force = false) {
+  const grid = document.getElementById("tod-grid");
+  if (!grid) return;
+  if (!force && state.todLoaded && Date.now() - state.todLoaded < TOD_REFRESH_MS) return;
+  const span = state.span;
+  let d;
+  try {
+    d = await getJSON(`/api/time-of-day?span=${span}`);
+  } catch {
+    grid.innerHTML = '<div class="empty">no data yet</div>';
+    return;
+  }
+  if (span !== state.span) return;   // a newer span was picked while this was loading
+  state.todLoaded = Date.now();
+  state.tod = d;
+
+  const meta = document.getElementById("tod-meta");
+  const summary = document.getElementById("tod-summary");
+  const w = d.window;
+  const sm = d.summary;
+  const zone = w.zone_label || w.timezone;
+  const fmtDay = (t) => new Date(t * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+
+  if (!sm.screens) {
+    meta.textContent = "";
+    summary.textContent = "";
+    document.getElementById("tod-legend").textContent = "";
+    grid.innerHTML = '<div class="empty">no status screens in this window</div>';
+    document.getElementById("tod-detail").textContent = "";
+    return;
+  }
+
+  // Say exactly what the profile covers. On long spans it is cut to raw retention,
+  // and on short ones most slots are simply empty - both must be visible at a glance.
+  const covered = sm.last_ts - sm.first_ts;
+  meta.textContent =
+    `${fmtDay(sm.first_ts)} – ${fmtDay(sm.last_ts)} · ${humanDelta(covered)} of data · ` +
+    `across ${sm.days} calendar day${sm.days === 1 ? "" : "s"} · 30-min slots, ${zone}` +
+    (w.limited_by_retention ? ` · capped at ${w.raw_days} d raw retention` : "");
+  meta.title = w.limited_by_retention
+    ? `The ${w.span} span reaches past raw retention. Half-hour slots and lock state ` +
+      `need raw samples, so this covers the last ${w.raw_days} days only.`
+    : "";
+
+  const observed = d.slots.map((s, i) => [i, s]).filter(([, s]) => s.screens);
+  const worst = observed.reduce((a, b) => (b[1].states.locked < a[1].states.locked ? b : a));
+  const best = observed.reduce((a, b) => (b[1].states.locked > a[1].states.locked ? b : a));
+  summary.innerHTML =
+    `<span><span class="k">Avg tracked</span><b>${fmt(sm.tracked_avg, 1)}</b></span>` +
+    (sm.visible_avg !== null ? `<span><span class="k">Avg visible</span><b>${fmt(sm.visible_avg, 1)}</b></span>` : "") +
+    `<span><span class="k">Locked</span><b>${pct(sm.states.locked)}</b> of observed time</span>` +
+    (observed.length > 1
+      ? `<span><span class="k">Weakest</span><b>${slotRange(d, worst[0])}</b> ${pct(worst[1].states.locked)}</span>` +
+        `<span><span class="k">Strongest</span><b>${slotRange(d, best[0])}</b> ${pct(best[1].states.locked)}</span>`
+      : "");
+
+  grid.textContent = "";
+  const cells = d.slots.map(() => []);
+  const add = (node, slot) => {
+    if (slot !== null) {
+      node.dataset.slot = slot;
+      cells[slot].push(node);
+    }
+    grid.append(node);
+    return node;
+  };
+  const label = (text, cls = "") => {
+    const l = document.createElement("div");
+    l.className = "tod-label " + cls;
+    l.textContent = text;
+    grid.append(l);
+  };
+
+  // Row 1: share of observed time in each state.
+  label("lock");
+  d.slots.forEach((s, i) => {
+    const c = document.createElement("div");
+    c.className = "tod-cell tod-lock" + (s.screens ? "" : " nodata");
+    for (const st of TOD_STATES) {
+      const v = s.states[st.key];
+      if (!v) continue;
+      const seg = document.createElement("span");
+      seg.style.height = `${v * 100}%`;
+      seg.style.background = st.colour;
+      c.append(seg);
+    }
+    add(c, i);
+  });
+
+  // Row 2: average satellites tracked, against visible behind it.
+  const top = Math.max(4, ...d.slots.map((s) => Math.max(
+    s.tracked ? s.tracked.avg : 0, s.visible ? s.visible.avg : 0)));
+  label("sats");
+  d.slots.forEach((s, i) => {
+    const c = document.createElement("div");
+    c.className = "tod-cell tod-sats" + (s.screens || s.tracked ? "" : " nodata");
+    if (s.visible) {
+      const v = document.createElement("span");
+      v.className = "vis";
+      v.style.height = `${(s.visible.avg / top) * 100}%`;
+      c.append(v);
+    }
+    if (s.tracked) {
+      const t = document.createElement("span");
+      t.className = "trk";
+      t.style.height = `${(s.tracked.avg / top) * 100}%`;
+      c.append(t);
+    }
+    add(c, i);
+  });
+
+  // Hour scale, every three hours, ticked at the slot boundary it names.
+  const hourAxis = () => {
+    label("");
+    d.slots.forEach((s, i) => {
+      const c = document.createElement("div");
+      c.className = "tod-hour" + (i % 6 === 0 ? " tick" : "");
+      c.textContent = i % 6 === 0 ? s.start.slice(0, 2) : "";
+      add(c, null);
+    });
+  };
+  hourAxis();
+
+  // One row per satellite: how often it was tracked in each slot. Ordered by the
+  // slot where each is most often tracked, so the passes form a staircase across
+  // the day; a gap in the staircase at an hour when satellites ought to be overhead
+  // is the signature of an obstruction.
+  const peak = (prn) => {
+    let best = 0, at = 0;
+    d.slots.forEach((s, i) => {
+      const v = s.prn_share[String(prn)] || 0;
+      if (v > best) { best = v; at = i; }
+    });
+    return at;
+  };
+  const prns = [...d.prns].sort((a, b) => (peak(a.prn) - peak(b.prn)) || (a.prn - b.prn));
+  for (const p of prns) {
+    label(String(p.prn), "prn");
+    d.slots.forEach((s, i) => {
+      const c = document.createElement("div");
+      c.className = "tod-cell tod-prn" + (s.screens ? "" : " nodata");
+      const v = s.prn_share[String(p.prn)] || 0;
+      if (v) c.style.setProperty("--a", Math.max(0.12, v).toFixed(3));
+      if (v >= TOD_USUAL) c.classList.add("usual");
+      add(c, i);
+    });
+  }
+
+  // A long satellite list scrolls the top axis away, so repeat it underneath.
+  if (prns.length > 12) hourAxis();
+
+  // Legend, including the satellite row's scale, which has no axis of its own.
+  const legend = document.getElementById("tod-legend");
+  legend.innerHTML = TOD_STATES.filter((st) => sm.states[st.key])
+    .map((st) => `<span class="lock-key"><span class="swatch" style="background:${st.colour}">` +
+      `</span>${st.label}</span>`).join("") +
+    `<span class="lock-key"><span class="swatch" style="background:var(--accent)"></span>Tracked</span>` +
+    `<span class="lock-key"><span class="swatch tod-vis-swatch"></span>Visible (bar top = ${top.toFixed(1)} sats)</span>`;
+
+  // Hover and tap select a column across every row at once.
+  let current = null;
+  const select = (i) => {
+    if (current !== null) cells[current].forEach((n) => n.classList.remove("hot"));
+    current = i;
+    if (i !== null) cells[i].forEach((n) => n.classList.add("hot"));
+    todDetail(d, i);
+  };
+  const slotOf = (e) => {
+    const n = e.target.closest("[data-slot]");
+    return n ? Number(n.dataset.slot) : null;
+  };
+  // Assigned rather than added, because the grid is rebuilt on every refresh.
+  grid.onmouseover = (e) => {
+    const i = slotOf(e);
+    if (i !== null) select(i);
+  };
+  // A tap pins the slot, since touch has no hover to fall back on; tapping the
+  // pinned slot again releases it.
+  grid.onclick = (e) => {
+    const i = slotOf(e);
+    if (i === null) return;
+    state.todPinned = state.todPinned === i ? null : i;
+    select(i);
+  };
+  grid.onmouseleave = () => select(state.todPinned ?? null);
+  select(state.todPinned ?? null);
+}
+
 /* ------------------------------------------------------- satellite signal chart */
 
 async function loadSatSignal() {
@@ -1161,6 +1424,7 @@ async function refreshSlow() {
   await loadStates();
   await loadAllCharts();
   await loadAdev();
+  await loadTimeOfDay();
   await loadSatSignal();
   await loadEvents();
 }
@@ -1172,6 +1436,7 @@ document.querySelectorAll(".span").forEach((b) => {
     state.span = b.dataset.span;
     loadStates().then(loadAllCharts);
     loadAdev();
+    loadTimeOfDay(true);
     loadSatSignal();
     if (state.trails) loadSky();
   });

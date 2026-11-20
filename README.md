@@ -47,6 +47,13 @@ Everything on one page, over a selectable span from five minutes to a year: the
 background of every sparkline below it, per-satellite signal strength, and the
 current state as tiles. Every panel has a tooltip explaining what it measures.
 
+A time-of-day profile folds every day in the selected span onto one 24-hour clock in
+30-minute slots: how likely the unit is to be locked in each slot, the average
+number of satellites tracked, and which satellites are usually tracked when. An
+obstructed antenna fails at the same time each day, and this is where that shows.
+It needs raw samples, so on spans longer than raw retention (14 days by default) it
+covers the retained days and says so.
+
 Gaps in the data are drawn as gaps rather than interpolated across, and the charts
 share one cursor, so hovering any of them reads every metric at the same instant.
 
